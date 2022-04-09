@@ -39,11 +39,15 @@ private:
 
     bool _isAtEnd();
 
-    void _match(const std::string &types);
+    bool _match(const TokenType &types);
 
-    void _consume(const std::string &types, const std::string &message);
+    bool _match(const std::vector<TokenType> &types);
 
-    void _check(const std::string &types);
+    bool _check(const TokenType &types);
+
+    bool _check(const std::vector<TokenType> &types);
+
+    Token _consume(const std::vector<TokenType> &types, const std::string &message);
 
     Token _advance();
 

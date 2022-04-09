@@ -51,11 +51,40 @@ bool WgslParser::_isAtEnd() {
     return _current >= _tokens.size() || _peek()._type == Token::TokenEOF;
 }
 
-void WgslParser::_match(const std::string &types) {}
+bool WgslParser::_match(const TokenType &types) {
+    if (_check(types)) {
+        _advance();
+        return true;
+    }
+    return false;
+}
 
-void WgslParser::_consume(const std::string &types, const std::string &message) {}
+bool WgslParser::_match(const std::vector<TokenType> &types) {
+    for (const auto &type: types) {
+        if (_check(type)) {
+            _advance();
+            return true;
+        }
+    }
 
-void WgslParser::_check(const std::string &types) {}
+    return false;
+}
+
+bool WgslParser::_check(const TokenType &types) {
+    if (_isAtEnd()) return false;
+    return _peek()._type == types;
+}
+
+bool WgslParser::_check(const std::vector<TokenType> &types) {
+    if (_isAtEnd()) return false;
+    const auto iter = std::find(types.begin(), types.end(), _peek()._type);
+    return iter != types.end();
+}
+
+Token WgslParser::_consume(const std::vector<TokenType> &types, const std::string &message) {
+    if (_check(types)) return _advance();
+    throw std::runtime_error(message);
+}
 
 Token WgslParser::_advance() {
     if (!_isAtEnd()) _current++;
