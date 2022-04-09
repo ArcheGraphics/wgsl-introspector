@@ -17,6 +17,10 @@ struct TokenType {
     std::string type;
     std::string rule;
     bool isRegex;
+
+    bool operator==(TokenType& t) const {
+        return name == t.name;
+    }
 };
 
 class Token {
@@ -52,6 +56,7 @@ public:
     const std::string &toString();
 
 private:
+    friend class WgslScanner;
     TokenType _type;
     std::string _lexeme;
     size_t _line;
@@ -68,13 +73,13 @@ public:
 
     std::optional<TokenType> _findToken(const std::string &lexeme);
 
-    bool _match(const std::string &lexeme, const std::string &rule);
+    static bool _match(const std::string &lexeme, const std::string &rule);
 
-    bool _match(const std::string &lexeme, const std::regex &rule);
+    static bool _match(const std::string &lexeme, const std::regex &rule);
+
+    static bool _isWhitespace(const std::string &c);
 
     bool _isAtEnd();
-
-    bool _isWhitespace(const std::string &c);
 
     std::string _advance(size_t amount = 0);
 

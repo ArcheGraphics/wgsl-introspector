@@ -385,7 +385,7 @@ void Token::initialize() {
 Token::Token(TokenType type, std::string lexeme, size_t line) :
         _type(std::move(type)),
         _lexeme(std::move(lexeme)),
-        _line(std::move(line)) {
+        _line(line) {
 }
 
 const std::string &Token::toString() {
@@ -458,6 +458,85 @@ bool WgslScanner::scanToken() {
             return true;
         }
     }
+
+    std::optional<TokenType> matchToken = std::nullopt;
+    for (;;) {
+        auto matchedToken = _findToken(lexeme);
+
+        // The exception to "longest lexeme" rule is '>>'. In the case of 1>>2, it's a shift_right.
+        // In the case of array<vec4<f32>>, it's two greater_than's (one to close the vec4,
+        // and one to close the array).
+        // I don't know of a great way to resolve this, so '>>' is special-cased and if
+        // there was a less_than up to some number of tokens previously, and the token prior to
+        // that is a keyword that requires a '<', then it will be split into two greater_than's;
+        // otherwise it's a shift_right.
+        if (lexeme == ">" && _peekAhead() == ">") {
+            bool foundLessThan = false;
+            size_t ti = _tokens.size() - 1;
+            for (size_t count = 0; count < 4 && ti >= 0; ++count, --ti) {
+                if (_tokens[ti]._type == Token::Tokens["less_than"]) {
+                    const auto iter = Token::TemplateTypes.find(_tokens[ti - 1]._type.name);
+                    if (ti > 0 && iter != Token::TemplateTypes.end()) {
+                        foundLessThan = true;
+                    }
+                    break;
+                }
+            }
+            // If there was a less_than in the recent token history, then this is probably a
+            // greater_than.
+            if (foundLessThan) {
+                _addToken(matchedToken.value());
+                return true;
+            }
+        }
+
+        // The current lexeme may not match any rule, but some token types may be invalid for
+        // part of the string but valid after a few more characters.
+        // For example, 0x.5 is a hex_float_literal. But as it's being scanned,
+        // "0" is a int_literal, then "0x" is invalid. If we stopped there, it would return
+        // the int_literal "0", but that's incorrect. So if we look forward a few characters,
+        // we'd get "0x.", which is still invalid, followed by "0x.5" which is the correct
+        // hex_float_literal. So that means if we hit an non-matching string, we should look
+        // ahead up to two characters to see if the string starts matching a valid rule again.
+        if (!matchedToken) {
+            std::string lookAheadLexeme = lexeme;
+            size_t lookAhead = 0;
+            size_t maxLookAhead = 2;
+            for (size_t li = 0; li < maxLookAhead; ++li) {
+                lookAheadLexeme += _peekAhead(li);
+                matchedToken = _findToken(lookAheadLexeme);
+                if (matchedToken) {
+                    lookAhead = li;
+                    break;
+                }
+            }
+
+            if (!matchedToken) {
+                if (!matchToken)
+                    return false;
+                _current--;
+                _addToken(matchToken.value());
+                return true;
+            }
+
+            lexeme = lookAheadLexeme;
+            _current += lookAhead + 1;
+        }
+
+        matchToken = matchedToken;
+
+        if (_isAtEnd())
+            break;
+
+        lexeme += _advance();
+    }
+
+    // We got to the end of the input stream. Then the token we've ready so far is it.
+    if (matchToken == std::nullopt)
+        return false;
+
+    _addToken(matchToken.value());
+    return true;
 }
 
 std::optional<TokenType> WgslScanner::_findToken(const std::string &lexeme) {
