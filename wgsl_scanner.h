@@ -10,27 +10,82 @@
 #include <string>
 #include <unordered_map>
 #include <regex>
+#include <utility>
+
+struct TokenType {
+    std::string name;
+    std::string type;
+    std::string rule;
+    bool isRegex;
+};
 
 class Token {
 public:
-    static const std::unordered_map<std::string, std::regex> WgslTokens;
+    static const TokenType TokenEOF;
+    static const std::unordered_map<std::string, std::string> WgslTokens;
     static const std::vector<std::string> WgslKeywords;
     static const std::vector<std::string> WgslReserved;
 
+    static std::unordered_map<std::string, TokenType> Tokens;
+    static std::unordered_map<std::string, TokenType> Keywords;
+
+    static std::unordered_map<std::string, TokenType &> StorageClass;
+    static std::unordered_map<std::string, TokenType &> AccessMode;
+    static std::unordered_map<std::string, TokenType &> SamplerType;
+    static std::unordered_map<std::string, TokenType &> SampledTextureType;
+    static std::unordered_map<std::string, TokenType &> MultisampledTextureType;
+    static std::unordered_map<std::string, TokenType &> StorageTextureType;
+    static std::unordered_map<std::string, TokenType &> DepthTextureType;
+    static std::unordered_map<std::string, TokenType &> TextureType;
+    static std::unordered_map<std::string, TokenType &> TexelFormat;
+    static std::unordered_map<std::string, TokenType &> ConstLiteral;
+    static std::unordered_map<std::string, TokenType &> LiteralOrIdent;
+    static std::unordered_map<std::string, TokenType &> ElementCountExpression;
+    static std::unordered_map<std::string, TokenType &> TemplateTypes;
+    static std::unordered_map<std::string, TokenType &> AttributeName;
+
     static void initialize();
 
-private:
-    static std::unordered_map<std::string, Token> Tokens;
-
 public:
-    Token(std::string type, std::string lexeme, std::string line);
+    Token(TokenType type, std::string lexeme, size_t line);
 
     const std::string &toString();
 
 private:
-    std::string _type;
+    TokenType _type;
     std::string _lexeme;
-    std::string _line;
+    size_t _line;
+};
+
+//MARK: - WgslScanner
+class WgslScanner {
+public:
+    explicit WgslScanner(std::string source);
+
+    void scanTokens();
+
+    bool scanToken();
+
+    void _findToken(const std::string &lexeme);
+
+    void _match(const std::string &lexeme, const std::regex &rule);
+
+    bool _isAtEnd();
+
+    bool _isWhitespace(const std::string &c);
+
+    std::string _advance(size_t amount = 0);
+
+    std::string _peekAhead(size_t offset = 0);
+
+    void _addToken(const std::string &type);
+
+private:
+    std::string _source;
+    std::vector<Token> _tokens{};
+    size_t _start = 0;
+    size_t _current = 0;
+    size_t _line = 1;
 };
 
 #endif //WGSL_INTROSPECTOR_WGSL_SCANNER_H
