@@ -71,7 +71,7 @@ public:
 
     bool scanToken();
 
-    std::optional<TokenType> _findToken(const std::string &lexeme);
+    static std::optional<TokenType> _findToken(const std::string &lexeme);
 
     static bool _match(const std::string &lexeme, const std::string &rule);
 
