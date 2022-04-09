@@ -26,18 +26,18 @@ class WgslParser {
 public:
     WgslParser() = default;
 
-    void parse(const std::string &code);
+    std::vector<AST> parse(const std::string &code);
 
-    void parse(const std::vector<TokenType> &tokens);
+    std::vector<AST> parse(const std::vector<Token> &tokens);
 
 private:
     void _initialize(const std::string &code);
 
-    void _initialize(const std::vector<TokenType> &tokens);
+    void _initialize(const std::vector<Token> &tokens);
 
-    void _error(const std::string &token, const std::string &message);
+    void _error(const Token &token, const std::string &message);
 
-    void _isAtEnd();
+    bool _isAtEnd();
 
     void _match(const std::string &types);
 
@@ -45,14 +45,14 @@ private:
 
     void _check(const std::string &types);
 
-    void _advance();
+    Token _advance();
 
-    void _peek();
+    Token _peek();
 
-    void _previous();
+    Token _previous();
 
 private:
-    void _global_decl_or_directive();
+    std::optional<AST> _global_decl_or_directive();
 
     void _function_decl();
 
@@ -145,7 +145,7 @@ private:
     void _attribute();
 
 private:
-    std::vector<TokenType> _tokens{};
+    std::vector<Token> _tokens{};
     size_t _current = 0;
 };
 

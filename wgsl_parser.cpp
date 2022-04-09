@@ -6,17 +6,50 @@
 
 #include "wgsl_parser.h"
 
-void WgslParser::parse(const std::string &code) {}
+std::vector<AST> WgslParser::parse(const std::string &code) {
+    _initialize(code);
 
-void WgslParser::parse(const std::vector<TokenType> &tokens) {}
+    std::vector<AST> statements{};
+    while (!_isAtEnd()) {
+        auto statement = _global_decl_or_directive();
+        if (!statement)
+            break;
+        statements.emplace_back(statement.value());
+    }
+    return statements;
+}
 
-void WgslParser::_initialize(const std::string &code) {}
+std::vector<AST> WgslParser::parse(const std::vector<Token> &tokens) {
+    _initialize(tokens);
 
-void WgslParser::_initialize(const std::vector<TokenType> &tokens) {}
+    std::vector<AST> statements{};
+    while (!_isAtEnd()) {
+        auto statement = _global_decl_or_directive();
+        if (!statement)
+            break;
+        statements.emplace_back(statement.value());
+    }
+    return statements;
+}
 
-void WgslParser::_error(const std::string &token, const std::string &message) {}
+void WgslParser::_initialize(const std::string &code) {
+    auto scanner = WgslScanner(code);
+    _tokens = scanner.scanTokens();
+    _current = 0;
+}
 
-void WgslParser::_isAtEnd() {}
+void WgslParser::_initialize(const std::vector<Token> &tokens) {
+    _tokens = tokens;
+    _current = 0;
+}
+
+void WgslParser::_error(const Token &token, const std::string &message) {
+
+}
+
+bool WgslParser::_isAtEnd() {
+    return _current >= _tokens.size() || _peek()._type == Token::TokenEOF;
+}
 
 void WgslParser::_match(const std::string &types) {}
 
@@ -24,13 +57,20 @@ void WgslParser::_consume(const std::string &types, const std::string &message) 
 
 void WgslParser::_check(const std::string &types) {}
 
-void WgslParser::_advance() {}
+Token WgslParser::_advance() {
+    if (!_isAtEnd()) _current++;
+    return _previous();
+}
 
-void WgslParser::_peek() {}
+Token WgslParser::_peek() {
+    return _tokens[_current];
+}
 
-void WgslParser::_previous() {}
+Token WgslParser::_previous() {
+    return _tokens[_current - 1];
+}
 
-void WgslParser::_global_decl_or_directive() {}
+std::optional<AST> WgslParser::_global_decl_or_directive() {}
 
 void WgslParser::_function_decl() {}
 

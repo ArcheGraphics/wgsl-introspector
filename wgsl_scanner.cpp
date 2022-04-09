@@ -395,12 +395,15 @@ const std::string &Token::toString() {
 //MARK: - WgslScanner
 WgslScanner::WgslScanner(std::string source) : _source(std::move(source)) {}
 
-void WgslScanner::scanTokens() {
+std::vector<Token> WgslScanner::scanTokens() {
     while (!_isAtEnd()) {
         _start = _current;
         if (!scanToken())
             throw std::invalid_argument("Invalid syntax at line ${this._line}");
     }
+
+    _tokens.emplace_back(Token::TokenEOF, "", _line);
+    return _tokens;
 }
 
 bool WgslScanner::scanToken() {

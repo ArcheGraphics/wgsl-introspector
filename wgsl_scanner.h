@@ -21,6 +21,10 @@ struct TokenType {
     bool operator==(TokenType& t) const {
         return name == t.name;
     }
+
+    bool operator==(const TokenType& t) const {
+        return name == t.name;
+    }
 };
 
 class Token {
@@ -57,6 +61,8 @@ public:
 
 private:
     friend class WgslScanner;
+    friend class WgslParser;
+
     TokenType _type;
     std::string _lexeme;
     size_t _line;
@@ -67,7 +73,7 @@ class WgslScanner {
 public:
     explicit WgslScanner(std::string source);
 
-    void scanTokens();
+    std::vector<Token> scanTokens();
 
     bool scanToken();
 
