@@ -29,20 +29,20 @@ public:
     static std::unordered_map<std::string, TokenType> Tokens;
     static std::unordered_map<std::string, TokenType> Keywords;
 
-    static std::unordered_map<std::string, TokenType &> StorageClass;
-    static std::unordered_map<std::string, TokenType &> AccessMode;
-    static std::unordered_map<std::string, TokenType &> SamplerType;
-    static std::unordered_map<std::string, TokenType &> SampledTextureType;
-    static std::unordered_map<std::string, TokenType &> MultisampledTextureType;
-    static std::unordered_map<std::string, TokenType &> StorageTextureType;
-    static std::unordered_map<std::string, TokenType &> DepthTextureType;
-    static std::unordered_map<std::string, TokenType &> TextureType;
-    static std::unordered_map<std::string, TokenType &> TexelFormat;
-    static std::unordered_map<std::string, TokenType &> ConstLiteral;
-    static std::unordered_map<std::string, TokenType &> LiteralOrIdent;
-    static std::unordered_map<std::string, TokenType &> ElementCountExpression;
-    static std::unordered_map<std::string, TokenType &> TemplateTypes;
-    static std::unordered_map<std::string, TokenType &> AttributeName;
+    static std::unordered_map<std::string, TokenType> StorageClass;
+    static std::unordered_map<std::string, TokenType> AccessMode;
+    static std::unordered_map<std::string, TokenType> SamplerType;
+    static std::unordered_map<std::string, TokenType> SampledTextureType;
+    static std::unordered_map<std::string, TokenType> MultisampledTextureType;
+    static std::unordered_map<std::string, TokenType> StorageTextureType;
+    static std::unordered_map<std::string, TokenType> DepthTextureType;
+    static std::unordered_map<std::string, TokenType> TextureType;
+    static std::unordered_map<std::string, TokenType> TexelFormat;
+    static std::unordered_map<std::string, TokenType> ConstLiteral;
+    static std::unordered_map<std::string, TokenType> LiteralOrIdent;
+    static std::unordered_map<std::string, TokenType> ElementCountExpression;
+    static std::unordered_map<std::string, TokenType> TemplateTypes;
+    static std::unordered_map<std::string, TokenType> AttributeName;
 
     static void initialize();
 
@@ -66,9 +66,11 @@ public:
 
     bool scanToken();
 
-    void _findToken(const std::string &lexeme);
+    std::optional<TokenType> _findToken(const std::string &lexeme);
 
-    void _match(const std::string &lexeme, const std::regex &rule);
+    bool _match(const std::string &lexeme, const std::string &rule);
+
+    bool _match(const std::string &lexeme, const std::regex &rule);
 
     bool _isAtEnd();
 
@@ -78,7 +80,7 @@ public:
 
     std::string _peekAhead(size_t offset = 0);
 
-    void _addToken(const std::string &type);
+    void _addToken(const TokenType &type);
 
 private:
     std::string _source;

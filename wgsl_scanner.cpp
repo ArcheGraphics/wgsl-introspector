@@ -195,20 +195,20 @@ const std::vector<std::string> Token::WgslReserved = {
 std::unordered_map<std::string, TokenType> Token::Tokens{};
 std::unordered_map<std::string, TokenType> Token::Keywords{};
 
-std::unordered_map<std::string, TokenType &> Token::StorageClass{};
-std::unordered_map<std::string, TokenType &> Token::AccessMode{};
-std::unordered_map<std::string, TokenType &> Token::SamplerType{};
-std::unordered_map<std::string, TokenType &> Token::SampledTextureType{};
-std::unordered_map<std::string, TokenType &> Token::MultisampledTextureType{};
-std::unordered_map<std::string, TokenType &> Token::StorageTextureType{};
-std::unordered_map<std::string, TokenType &> Token::DepthTextureType{};
-std::unordered_map<std::string, TokenType &> Token::TextureType{};
-std::unordered_map<std::string, TokenType &> Token::TexelFormat{};
-std::unordered_map<std::string, TokenType &> Token::ConstLiteral{};
-std::unordered_map<std::string, TokenType &> Token::LiteralOrIdent{};
-std::unordered_map<std::string, TokenType &> Token::ElementCountExpression{};
-std::unordered_map<std::string, TokenType &> Token::TemplateTypes{};
-std::unordered_map<std::string, TokenType &> Token::AttributeName{};
+std::unordered_map<std::string, TokenType> Token::StorageClass{};
+std::unordered_map<std::string, TokenType> Token::AccessMode{};
+std::unordered_map<std::string, TokenType> Token::SamplerType{};
+std::unordered_map<std::string, TokenType> Token::SampledTextureType{};
+std::unordered_map<std::string, TokenType> Token::MultisampledTextureType{};
+std::unordered_map<std::string, TokenType> Token::StorageTextureType{};
+std::unordered_map<std::string, TokenType> Token::DepthTextureType{};
+std::unordered_map<std::string, TokenType> Token::TextureType{};
+std::unordered_map<std::string, TokenType> Token::TexelFormat{};
+std::unordered_map<std::string, TokenType> Token::ConstLiteral{};
+std::unordered_map<std::string, TokenType> Token::LiteralOrIdent{};
+std::unordered_map<std::string, TokenType> Token::ElementCountExpression{};
+std::unordered_map<std::string, TokenType> Token::TemplateTypes{};
+std::unordered_map<std::string, TokenType> Token::AttributeName{};
 
 void Token::initialize() {
     for (const auto &token: Token::WgslTokens) {
@@ -279,12 +279,12 @@ void Token::initialize() {
     Token::SampledTextureType["texture_3d"] = Keywords["texture_3d"];
     Token::SampledTextureType["texture_cube"] = Keywords["texture_cube"];
     Token::SampledTextureType["texture_cube_array"] = Keywords["texture_cube_array"];
-    for (const auto& type : SampledTextureType) {
+    for (const auto &type: SampledTextureType) {
         Token::TextureType[type.first] = type.second;
     }
 
     Token::MultisampledTextureType["texture_multisampled_2d"] = Keywords["texture_multisampled_2d"];
-    for (const auto& type : MultisampledTextureType) {
+    for (const auto &type: MultisampledTextureType) {
         Token::TextureType[type.first] = type.second;
     }
 
@@ -292,7 +292,7 @@ void Token::initialize() {
     Token::StorageTextureType["texture_storage_2d"] = Keywords["texture_storage_2d"];
     Token::StorageTextureType["texture_storage_2d_array"] = Keywords["texture_storage_2d_array"];
     Token::StorageTextureType["texture_storage_3d"] = Keywords["texture_storage_3d"];
-    for (const auto& type : StorageTextureType) {
+    for (const auto &type: StorageTextureType) {
         Token::TextureType[type.first] = type.second;
     }
 
@@ -301,7 +301,7 @@ void Token::initialize() {
     Token::DepthTextureType["texture_depth_cube"] = Keywords["texture_depth_cube"];
     Token::DepthTextureType["texture_depth_cube_array"] = Keywords["texture_depth_cube_array"];
     Token::DepthTextureType["texture_depth_multisampled_2d"] = Keywords["texture_depth_multisampled_2d"];
-    for (const auto& type : DepthTextureType) {
+    for (const auto &type: DepthTextureType) {
         Token::TextureType[type.first] = type.second;
     }
 
@@ -372,7 +372,7 @@ void Token::initialize() {
     Token::TemplateTypes["mat4x4"] = Keywords["mat4x4"];
     Token::TemplateTypes["atomic"] = Keywords["atomic"];
     Token::TemplateTypes["bitcast"] = Keywords["bitcast"];
-    for (const auto& type : TextureType) {
+    for (const auto &type: TextureType) {
         Token::TemplateTypes[type.first] = type.second;
     }
 
@@ -460,12 +460,37 @@ bool WgslScanner::scanToken() {
     }
 }
 
-void WgslScanner::_findToken(const std::string &lexeme) {
-
+std::optional<TokenType> WgslScanner::_findToken(const std::string &lexeme) {
+    for (const auto &name: Token::Keywords) {
+        if (_match(lexeme, name.second.rule)) {
+            return name.second;
+        }
+    }
+    for (const auto &name: Token::Tokens) {
+        if (name.second.isRegex) {
+            if (_match(lexeme, std::regex(name.second.rule))) {
+                return name.second;
+            }
+        } else {
+            if (_match(lexeme, name.second.rule)) {
+                return name.second;
+            }
+        }
+    }
+    return std::nullopt;
 }
 
-void WgslScanner::_match(const std::string &lexeme, const std::regex &rule) {
+bool WgslScanner::_match(const std::string &lexeme, const std::string &rule) {
+    if (rule == lexeme) {
+        return true;
+    }
+    return false;
+}
 
+bool WgslScanner::_match(const std::string &lexeme, const std::regex &rule) {
+    if (std::regex_search(lexeme, rule))
+        return true;
+    return false;
 }
 
 bool WgslScanner::_isAtEnd() {
@@ -488,6 +513,7 @@ std::string WgslScanner::_peekAhead(size_t offset) {
     return _source.substr(_current + offset);
 }
 
-void WgslScanner::_addToken(const std::string &type) {
-
+void WgslScanner::_addToken(const TokenType &type) {
+    const auto &text = _source.substr(_start, _current - _start);
+    _tokens.emplace_back(type, text, _line);
 }
