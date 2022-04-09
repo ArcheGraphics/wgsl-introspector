@@ -3,4 +3,4 @@ project(wgsl_introspector)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_library(wgsl_introspector library.cpp)
+add_library(wgsl_introspector introspector.cpp wgsl_scanner.cpp wgsl_scanner.h)
