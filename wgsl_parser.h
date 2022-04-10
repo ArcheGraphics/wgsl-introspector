@@ -12,25 +12,40 @@
 
 class AST {
 public:
-    AST(const std::string &type,
-        std::unordered_map<std::string, AST*> child = {},
-        std::string name = "") {
+    AST(const std::string &type) {
         _type = type;
-        _child = child;
-        _name = std::move(name);
     }
 
-    AST* operator[](std::string key) {
-        return _child[key];
+    void setChild(const std::string &name, AST *ast) {
+        _child[name] = ast;
     }
 
-    std::string name() {
+    const std::unordered_map<std::string, AST *> &child() const {
+        return _child;
+    }
+
+    void setChildVec(const std::string &name, const std::vector<AST *> &ast) {
+        _childVec[name] = ast;
+    }
+
+    const std::unordered_map<std::string, std::vector<AST *>> &childVec() const {
+        return _childVec;
+    }
+
+    void setName(const std::string &name) {
+        _name = name;
+    }
+
+    const std::string &name() const {
         return _name;
     }
 
 private:
+    friend class WgslParser;
+
     std::string _type;
-    std::unordered_map<std::string, AST*> _child{};
+    std::unordered_map<std::string, AST *> _child{};
+    std::unordered_map<std::string, std::vector<AST *>> _childVec{};
     std::string _name;
 };
 
@@ -39,9 +54,9 @@ class WgslParser {
 public:
     WgslParser() = default;
 
-    std::vector<AST*> parse(const std::string &code);
+    std::vector<AST *> parse(const std::string &code);
 
-    std::vector<AST*> parse(const std::vector<Token> &tokens);
+    std::vector<AST *> parse(const std::vector<Token> &tokens);
 
 private:
     void _initialize(const std::string &code);
@@ -71,97 +86,97 @@ private:
     Token _previous();
 
 private:
-    AST* _global_decl_or_directive();
+    AST *_global_decl_or_directive();
 
     void _function_decl();
 
-    AST* _compound_statement();
+    AST *_compound_statement();
 
-    AST* _statement();
+    AST *_statement();
 
-    AST* _while_statement();
+    AST *_while_statement();
 
-    AST* _for_statement();
+    AST *_for_statement();
 
-    AST* _for_init();
+    AST *_for_init();
 
-    AST* _for_increment();
+    AST *_for_increment();
 
-    AST* _variable_statement();
+    AST *_variable_statement();
 
-    AST* _assignment_statement();
+    AST *_assignment_statement();
 
-    AST* _func_call_statement();
+    AST *_func_call_statement();
 
-    AST* _loop_statement();
+    AST *_loop_statement();
 
-    AST* _switch_statement();
+    AST *_switch_statement();
 
-    AST* _switch_body();
+    AST *_switch_body();
 
-    AST* _case_selectors();
+    AST *_case_selectors();
 
-    AST* _case_body();
+    AST *_case_body();
 
-    AST* _if_statement();
+    AST *_if_statement();
 
-    AST* _elseif_statement();
+    AST *_elseif_statement();
 
-    AST* _return_statement();
+    AST *_return_statement();
 
-    AST* _short_circuit_or_expression();
+    AST *_short_circuit_or_expression();
 
-    AST* _short_circuit_and_expr();
+    AST *_short_circuit_and_expr();
 
-    AST* _inclusive_or_expression();
+    AST *_inclusive_or_expression();
 
-    AST* _exclusive_or_expression();
+    AST *_exclusive_or_expression();
 
-    AST* _and_expression();
+    AST *_and_expression();
 
-    AST* _equality_expression();
+    AST *_equality_expression();
 
-    AST* _relational_expression();
+    AST *_relational_expression();
 
-    AST* _shift_expression();
+    AST *_shift_expression();
 
-    AST* _additive_expression();
+    AST *_additive_expression();
 
-    AST* _multiplicative_expression();
+    AST *_multiplicative_expression();
 
-    AST* _unary_expression();
+    AST *_unary_expression();
 
-    AST* _singular_expression();
+    AST *_singular_expression();
 
-    AST* _postfix_expression();
+    AST *_postfix_expression();
 
-    AST* _primary_expression();
+    AST *_primary_expression();
 
-    AST* _argument_expression_list();
+    AST *_argument_expression_list();
 
-    AST* _optional_paren_expression();
+    AST *_optional_paren_expression();
 
-    AST* _paren_expression();
+    AST *_paren_expression();
 
-    AST* _struct_decl();
+    AST *_struct_decl();
 
-    AST* _global_variable_decl();
+    AST *_global_variable_decl();
 
-    AST* _global_constant_decl();
+    AST *_global_constant_decl();
 
-    AST* _const_expression();
+    AST *_const_expression();
 
-    AST* _variable_decl();
+    AST *_variable_decl();
 
-    AST* _enable_directive();
+    AST *_enable_directive();
 
-    AST* _type_alias();
+    AST *_type_alias();
 
-    AST* _type_decl();
+    AST *_type_decl();
 
-    AST* _texture_sampler_types();
+    AST *_texture_sampler_types();
 
-    AST* _attribute();
+    AST *_attribute();
 
 private:
     std::vector<Token> _tokens{};

@@ -123,6 +123,7 @@ AST *WgslParser::_compound_statement() {
     _consume(Token::Tokens["brace_right"], "Expected '}' for block.");
 
     auto ast = std::make_unique<AST>("");
+    ast->setChildVec("", statements);
     auto astPtr = ast.get();
     _astPool.emplace_back(std::move(ast));
     return astPtr;
@@ -204,42 +205,200 @@ AST *WgslParser::_while_statement() {
     auto condition = _optional_paren_expression();
     auto block = _compound_statement();
 
-    std::unordered_map<std::string, AST *> child{
-            {"condition", condition},
-            {"block", block}
-    };
-    std::unique_ptr<AST> ast = std::make_unique<AST>("while", child);
+    std::unique_ptr<AST> ast = std::make_unique<AST>("while");
+    ast->setChild("condition", condition);
+    ast->setChild("block", block);
     auto astPtr = ast.get();
     _astPool.emplace_back(std::move(ast));
     return astPtr;
 }
 
 AST *WgslParser::_for_statement() {
-    return nullptr;
+    // for paren_left for_header paren_right compound_statement
+    if (!_match(Token::Keywords["for"]))
+        return nullptr;
+
+    _consume(Token::Tokens["paren_left"], "Expected '('.");
+
+    // for_header: (variable_statement assignment_statement func_call_statement)?
+    // semicolon short_circuit_or_expression? semicolon (assignment_statement func_call_statement)?
+    auto init = !_check(Token::Tokens["semicolon"]) ? _for_init() : nullptr;
+    _consume(Token::Tokens["semicolon"], "Expected ';'.");
+    auto condition = !_check(Token::Tokens["semicolon"]) ? _short_circuit_or_expression() : nullptr;
+    _consume(Token::Tokens["semicolon"], "Expected ';'.");
+    auto increment = !_check(Token::Tokens["paren_right"]) ? _for_increment() : nullptr;
+
+    _consume(Token::Tokens["paren_right"], "Expected ')'.");
+
+    auto body = _compound_statement();
+
+    std::unique_ptr<AST> ast = std::make_unique<AST>("for");
+    ast->setChild("init", init);
+    ast->setChild("condition", condition);
+    ast->setChild("increment", increment);
+    ast->setChild("body", body);
+
+    auto astPtr = ast.get();
+    _astPool.emplace_back(std::move(ast));
+    return astPtr;
 }
 
 AST *WgslParser::_for_init() {
+    // (variable_statement assignment_statement func_call_statement)?
+    auto state = _variable_statement();
+    if (state) {
+        return state;
+    }
+
+    state = _func_call_statement();
+    if (state) {
+        return state;
+    }
+
+    state = _assignment_statement();
+    if (state) {
+        return state;
+    }
     return nullptr;
 }
 
 AST *WgslParser::_for_increment() {
+    // (assignment_statement func_call_statement)?
+    auto state = _func_call_statement();
+    if (state) {
+        return state;
+    }
+
+    state = _assignment_statement();
+    if (state) {
+        return state;
+    }
     return nullptr;
 }
 
 AST *WgslParser::_variable_statement() {
+    // variable_decl
+    // variable_decl equal short_circuit_or_expression
+    // let (ident variable_ident_decl) equal short_circuit_or_expression
+    if (_check(Token::Keywords["var"])) {
+        auto _var = _variable_decl();
+        AST *value = nullptr;
+        if (_match(Token::Tokens["equal"]))
+            value = _short_circuit_or_expression();
+
+        std::unordered_map<std::string, AST *> child{
+                {"var",   _var},
+                {"value", value}
+        };
+        std::unique_ptr<AST> ast = std::make_unique<AST>("var");
+        auto astPtr = ast.get();
+        _astPool.emplace_back(std::move(ast));
+        return astPtr;
+    }
+
+    if (_match(Token::Keywords["let"])) {
+        auto name = _consume(Token::Tokens["ident"], "Expected name for let.").toString();
+        AST *type = nullptr;
+        if (_match(Token::Tokens["colon"])) {
+            auto typeAttrs = _attribute();
+            type = _type_decl();
+            type->_child["attributes"] = typeAttrs;
+        }
+        _consume(Token::Tokens["equal"], "Expected '=' for let.");
+        auto value = _short_circuit_or_expression();
+
+        std::unique_ptr<AST> ast = std::make_unique<AST>("let");
+        ast->setChild("type", type);
+        ast->setChild("value", value);
+        ast->setName(name);
+
+        auto astPtr = ast.get();
+        _astPool.emplace_back(std::move(ast));
+        return astPtr;
+    }
+
     return nullptr;
 }
 
 AST *WgslParser::_assignment_statement() {
-    return nullptr;
+    // (unary_expression underscore) equal short_circuit_or_expression
+    AST *_var = nullptr;
+
+    if (_check(Token::Tokens["brace_right"]))
+        return nullptr;
+
+    auto isUnderscore = _match(Token::Tokens["underscore"]);
+    if (!isUnderscore)
+        _var = _unary_expression();
+
+    if (!isUnderscore && _var == nullptr)
+        return nullptr;
+
+    _consume(Token::Tokens["equal"], "Expected '='.");
+
+    auto value = _short_circuit_or_expression();
+
+    std::unique_ptr<AST> ast = std::make_unique<AST>("assign");
+    ast->setChild("var", _var);
+    ast->setChild("value", value);
+
+    auto astPtr = ast.get();
+    _astPool.emplace_back(std::move(ast));
+    return astPtr;
 }
 
 AST *WgslParser::_func_call_statement() {
-    return nullptr;
+    // ident argument_expression_list
+    if (!_check(Token::Tokens["ident"]))
+        return nullptr;
+
+    auto savedPos = _current;
+    auto name = _consume(Token::Tokens["ident"], "Expected function name.");
+    auto args = _argument_expression_list();
+
+    if (args == nullptr) {
+        _current = savedPos;
+        return nullptr;
+    }
+
+    std::unique_ptr<AST> ast = std::make_unique<AST>("call");
+    ast->setChild("args", args);
+    ast->setName(name._type.name);
+
+    auto astPtr = ast.get();
+    _astPool.emplace_back(std::move(ast));
+    return astPtr;
 }
 
 AST *WgslParser::_loop_statement() {
-    return nullptr;
+    // loop brace_left statement* continuing_statement? brace_right
+    if (!_match(Token::Keywords["loop"]))
+        return nullptr;
+
+    _consume(Token::Tokens["brace_left"], "Expected '{' for loop.");
+
+    // statement*
+    std::vector<AST *> statements{};
+    auto statement = _statement();
+    while (statement != nullptr) {
+        statements.push_back(statement);
+        statement = _statement();
+    }
+
+    // continuing_statement: continuing compound_statement
+    AST *continuing = nullptr;
+    if (_match(Token::Keywords["continuing"]))
+        continuing = _compound_statement();
+
+    _consume(Token::Tokens["brace_right"], "Expected '}' for loop.");
+
+    std::unique_ptr<AST> ast = std::make_unique<AST>("loop");
+    ast->setChildVec("statements", statements);
+    ast->setChild("continuing", continuing);
+
+    auto astPtr = ast.get();
+    _astPool.emplace_back(std::move(ast));
+    return astPtr;
 }
 
 AST *WgslParser::_switch_statement() {
