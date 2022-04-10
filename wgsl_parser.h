@@ -7,18 +7,31 @@
 #ifndef WGSL_INTROSPECTOR_WGSL_PARSER_H
 #define WGSL_INTROSPECTOR_WGSL_PARSER_H
 
+#include <utility>
 #include "wgsl_scanner.h"
 
 class AST {
 public:
-    AST(const std::string &type, const std::vector<std::string> &options) {
+    AST(const std::string &type,
+        std::unordered_map<std::string, AST*> child = {},
+        std::string name = "") {
         _type = type;
-        _options = options;
+        _child = child;
+        _name = std::move(name);
+    }
+
+    AST* operator[](std::string key) {
+        return _child[key];
+    }
+
+    std::string name() {
+        return _name;
     }
 
 private:
     std::string _type;
-    std::vector<std::string> _options;
+    std::unordered_map<std::string, AST*> _child{};
+    std::string _name;
 };
 
 
@@ -26,9 +39,9 @@ class WgslParser {
 public:
     WgslParser() = default;
 
-    std::vector<AST> parse(const std::string &code);
+    std::vector<AST*> parse(const std::string &code);
 
-    std::vector<AST> parse(const std::vector<Token> &tokens);
+    std::vector<AST*> parse(const std::vector<Token> &tokens);
 
 private:
     void _initialize(const std::string &code);
@@ -47,6 +60,8 @@ private:
 
     bool _check(const std::vector<TokenType> &types);
 
+    Token _consume(const TokenType &types, const std::string &message);
+
     Token _consume(const std::vector<TokenType> &types, const std::string &message);
 
     Token _advance();
@@ -56,101 +71,103 @@ private:
     Token _previous();
 
 private:
-    std::optional<AST> _global_decl_or_directive();
+    AST* _global_decl_or_directive();
 
     void _function_decl();
 
-    void _compound_statement();
+    AST* _compound_statement();
 
-    void _statement();
+    AST* _statement();
 
-    void _while_statement();
+    AST* _while_statement();
 
-    void _for_statement();
+    AST* _for_statement();
 
-    void _for_init();
+    AST* _for_init();
 
-    void _for_increment();
+    AST* _for_increment();
 
-    void _variable_statement();
+    AST* _variable_statement();
 
-    void _assignment_statement();
+    AST* _assignment_statement();
 
-    void _func_call_statement();
+    AST* _func_call_statement();
 
-    void _loop_statement();
+    AST* _loop_statement();
 
-    void _switch_statement();
+    AST* _switch_statement();
 
-    void _switch_body();
+    AST* _switch_body();
 
-    void _case_selectors();
+    AST* _case_selectors();
 
-    void _case_body();
+    AST* _case_body();
 
-    void _if_statement();
+    AST* _if_statement();
 
-    void _elseif_statement();
+    AST* _elseif_statement();
 
-    void _return_statement();
+    AST* _return_statement();
 
-    void _short_circuit_or_expression();
+    AST* _short_circuit_or_expression();
 
-    void _short_circuit_and_expr();
+    AST* _short_circuit_and_expr();
 
-    void _inclusive_or_expression();
+    AST* _inclusive_or_expression();
 
-    void _exclusive_or_expression();
+    AST* _exclusive_or_expression();
 
-    void _and_expression();
+    AST* _and_expression();
 
-    void _equality_expression();
+    AST* _equality_expression();
 
-    void _relational_expression();
+    AST* _relational_expression();
 
-    void _shift_expression();
+    AST* _shift_expression();
 
-    void _additive_expression();
+    AST* _additive_expression();
 
-    void _multiplicative_expression();
+    AST* _multiplicative_expression();
 
-    void _unary_expression();
+    AST* _unary_expression();
 
-    void _singular_expression();
+    AST* _singular_expression();
 
-    void _postfix_expression();
+    AST* _postfix_expression();
 
-    void _primary_expression();
+    AST* _primary_expression();
 
-    void _argument_expression_list();
+    AST* _argument_expression_list();
 
-    void _optional_paren_expression();
+    AST* _optional_paren_expression();
 
-    void _paren_expression();
+    AST* _paren_expression();
 
-    void _struct_decl();
+    AST* _struct_decl();
 
-    void _global_variable_decl();
+    AST* _global_variable_decl();
 
-    void _global_constant_decl();
+    AST* _global_constant_decl();
 
-    void _const_expression();
+    AST* _const_expression();
 
-    void _variable_decl();
+    AST* _variable_decl();
 
-    void _enable_directive();
+    AST* _enable_directive();
 
-    void _type_alias();
+    AST* _type_alias();
 
-    void _type_decl();
+    AST* _type_decl();
 
-    void _texture_sampler_types();
+    AST* _texture_sampler_types();
 
-    void _attribute();
+    AST* _attribute();
 
 private:
     std::vector<Token> _tokens{};
     size_t _current = 0;
+
+    std::vector<std::unique_ptr<AST>> _astPool{};
 };
 
 #endif //WGSL_INTROSPECTOR_WGSL_PARSER_H

@@ -5,29 +5,30 @@
 //  property of any third parties.
 
 #include "wgsl_parser.h"
+#include <memory>
 
-std::vector<AST> WgslParser::parse(const std::string &code) {
+std::vector<AST *> WgslParser::parse(const std::string &code) {
     _initialize(code);
 
-    std::vector<AST> statements{};
+    std::vector<AST *> statements{};
     while (!_isAtEnd()) {
         auto statement = _global_decl_or_directive();
         if (!statement)
             break;
-        statements.emplace_back(statement.value());
+        statements.emplace_back(statement);
     }
     return statements;
 }
 
-std::vector<AST> WgslParser::parse(const std::vector<Token> &tokens) {
+std::vector<AST *> WgslParser::parse(const std::vector<Token> &tokens) {
     _initialize(tokens);
 
-    std::vector<AST> statements{};
+    std::vector<AST *> statements{};
     while (!_isAtEnd()) {
         auto statement = _global_decl_or_directive();
         if (!statement)
             break;
-        statements.emplace_back(statement.value());
+        statements.emplace_back(statement);
     }
     return statements;
 }
@@ -81,6 +82,11 @@ bool WgslParser::_check(const std::vector<TokenType> &types) {
     return iter != types.end();
 }
 
+Token WgslParser::_consume(const TokenType &types, const std::string &message) {
+    if (_check(types)) return _advance();
+    throw std::runtime_error(message);
+}
+
 Token WgslParser::_consume(const std::vector<TokenType> &types, const std::string &message) {
     if (_check(types)) return _advance();
     throw std::runtime_error(message);
@@ -99,94 +105,275 @@ Token WgslParser::_previous() {
     return _tokens[_current - 1];
 }
 
-std::optional<AST> WgslParser::_global_decl_or_directive() {}
+AST *WgslParser::_global_decl_or_directive() {
+    return nullptr;
+}
 
 void WgslParser::_function_decl() {}
 
-void WgslParser::_compound_statement() {}
+AST *WgslParser::_compound_statement() {
+    // brace_left statement* brace_right
+    std::vector<AST *> statements{};
+    _consume(Token::Tokens["brace_left"], "Expected '{' for block.");
+    while (!_check(Token::Tokens["brace_right"])) {
+        const auto statement = _statement();
+        if (statement)
+            statements.emplace_back(statement);
+    }
+    _consume(Token::Tokens["brace_right"], "Expected '}' for block.");
 
-void WgslParser::_statement() {}
+    auto ast = std::make_unique<AST>("");
+    auto astPtr = ast.get();
+    _astPool.emplace_back(std::move(ast));
+    return astPtr;
+}
 
-void WgslParser::_while_statement() {}
+AST *WgslParser::_statement() {
+    // semicolon
+    // return_statement semicolon
+    // if_statement
+    // switch_statement
+    // loop_statement
+    // for_statement
+    // func_call_statement semicolon
+    // variable_statement semicolon
+    // break_statement semicolon
+    // continue_statement semicolon
+    // discard semicolon
+    // assignment_statement semicolon
+    // compound_statement
 
-void WgslParser::_for_statement() {}
+    // Ignore any stand-alone semicolons
+    while (_match(Token::Tokens["semicolon"]) && !_isAtEnd());
 
-void WgslParser::_for_init() {}
+    if (_check(Token::Keywords["if"]))
+        return _if_statement();
 
-void WgslParser::_for_increment() {}
+    if (_check(Token::Keywords["switch"]))
+        return _switch_statement();
 
-void WgslParser::_variable_statement() {}
+    if (_check(Token::Keywords["loop"]))
+        return _loop_statement();
 
-void WgslParser::_assignment_statement() {}
+    if (_check(Token::Keywords["for"]))
+        return _for_statement();
 
-void WgslParser::_func_call_statement() {}
+    if (_check(Token::Keywords["while"]))
+        return _while_statement();
 
-void WgslParser::_loop_statement() {}
+    if (_check(Token::Tokens["brace_left"]))
+        return _compound_statement();
 
-void WgslParser::_switch_statement() {}
+    AST *resultPtr = nullptr;
+    if (_check(Token::Keywords["return"]))
+        resultPtr = _return_statement();
+    else if (_check({Token::Keywords["var"], Token::Keywords["let"]}))
+        resultPtr = _variable_statement();
+    else if (_match(Token::Keywords["discard"])) {
+        auto result = std::make_unique<AST>("discard");
+        resultPtr = result.get();
+        _astPool.emplace_back(std::move(result));
+    } else if (_match(Token::Keywords["break"])) {
+        auto result = std::make_unique<AST>("break");
+        resultPtr = result.get();
+        _astPool.emplace_back(std::move(result));
+    } else if (_match(Token::Keywords["continue"])) {
+        auto result = std::make_unique<AST>("continue");
+        resultPtr = result.get();
+        _astPool.emplace_back(std::move(result));
+    } else {
+        auto state = _func_call_statement();
+        if (state) {
+            resultPtr = state;
+        }
+        state = _assignment_statement();
+        if (state) {
+            resultPtr = state;
+        }
+    }
 
-void WgslParser::_switch_body() {}
+    if (resultPtr != nullptr)
+        _consume(Token::Tokens["semicolon"], "Expected ';' after statement.");
 
-void WgslParser::_case_selectors() {}
+    return resultPtr;
+}
 
-void WgslParser::_case_body() {}
+AST *WgslParser::_while_statement() {
+    if (!_match(Token::Keywords["while"]))
+        return nullptr;
+    auto condition = _optional_paren_expression();
+    auto block = _compound_statement();
 
-void WgslParser::_if_statement() {}
+    std::unordered_map<std::string, AST *> child{
+            {"condition", condition},
+            {"block", block}
+    };
+    std::unique_ptr<AST> ast = std::make_unique<AST>("while", child);
+    auto astPtr = ast.get();
+    _astPool.emplace_back(std::move(ast));
+    return astPtr;
+}
 
-void WgslParser::_elseif_statement() {}
+AST *WgslParser::_for_statement() {
+    return nullptr;
+}
 
-void WgslParser::_return_statement() {}
+AST *WgslParser::_for_init() {
+    return nullptr;
+}
 
-void WgslParser::_short_circuit_or_expression() {}
+AST *WgslParser::_for_increment() {
+    return nullptr;
+}
 
-void WgslParser::_short_circuit_and_expr() {}
+AST *WgslParser::_variable_statement() {
+    return nullptr;
+}
 
-void WgslParser::_inclusive_or_expression() {}
+AST *WgslParser::_assignment_statement() {
+    return nullptr;
+}
 
-void WgslParser::_exclusive_or_expression() {}
+AST *WgslParser::_func_call_statement() {
+    return nullptr;
+}
 
-void WgslParser::_and_expression() {}
+AST *WgslParser::_loop_statement() {
+    return nullptr;
+}
 
-void WgslParser::_equality_expression() {}
+AST *WgslParser::_switch_statement() {
+    return nullptr;
+}
 
-void WgslParser::_relational_expression() {}
+AST *WgslParser::_switch_body() {
+    return nullptr;
+}
 
-void WgslParser::_shift_expression() {}
+AST *WgslParser::_case_selectors() {
+    return nullptr;
+}
 
-void WgslParser::_additive_expression() {}
+AST *WgslParser::_case_body() {
+    return nullptr;
+}
 
-void WgslParser::_multiplicative_expression() {}
+AST *WgslParser::_if_statement() {
+    return nullptr;
+}
 
-void WgslParser::_unary_expression() {}
+AST *WgslParser::_elseif_statement() {
+    return nullptr;
+}
 
-void WgslParser::_singular_expression() {}
+AST *WgslParser::_return_statement() {
+    return nullptr;
+}
 
-void WgslParser::_postfix_expression() {}
+AST *WgslParser::_short_circuit_or_expression() {
+    return nullptr;
+}
 
-void WgslParser::_primary_expression() {}
+AST *WgslParser::_short_circuit_and_expr() {
+    return nullptr;
+}
 
-void WgslParser::_argument_expression_list() {}
+AST *WgslParser::_inclusive_or_expression() {
+    return nullptr;
+}
 
-void WgslParser::_optional_paren_expression() {}
+AST *WgslParser::_exclusive_or_expression() {
+    return nullptr;
+}
 
-void WgslParser::_paren_expression() {}
+AST *WgslParser::_and_expression() {
+    return nullptr;
+}
 
-void WgslParser::_struct_decl() {}
+AST *WgslParser::_equality_expression() {
+    return nullptr;
+}
 
-void WgslParser::_global_variable_decl() {}
+AST *WgslParser::_relational_expression() {
+    return nullptr;
+}
 
-void WgslParser::_global_constant_decl() {}
+AST *WgslParser::_shift_expression() {
+    return nullptr;
+}
 
-void WgslParser::_const_expression() {}
+AST *WgslParser::_additive_expression() {
+    return nullptr;
+}
 
-void WgslParser::_variable_decl() {}
+AST *WgslParser::_multiplicative_expression() {
+    return nullptr;
+}
 
-void WgslParser::_enable_directive() {}
+AST *WgslParser::_unary_expression() {
+    return nullptr;
+}
 
-void WgslParser::_type_alias() {}
+AST *WgslParser::_singular_expression() {
+    return nullptr;
+}
 
-void WgslParser::_type_decl() {}
+AST *WgslParser::_postfix_expression() {
+    return nullptr;
+}
 
-void WgslParser::_texture_sampler_types() {}
+AST *WgslParser::_primary_expression() {
+    return nullptr;
+}
 
-void WgslParser::_attribute() {}
+AST *WgslParser::_argument_expression_list() {
+    return nullptr;
+}
+
+AST *WgslParser::_optional_paren_expression() {
+    return nullptr;
+}
+
+AST *WgslParser::_paren_expression() {
+    return nullptr;
+}
+
+AST *WgslParser::_struct_decl() {
+    return nullptr;
+}
+
+AST *WgslParser::_global_variable_decl() {
+    return nullptr;
+}
+
+AST *WgslParser::_global_constant_decl() {
+    return nullptr;
+}
+
+AST *WgslParser::_const_expression() {
+    return nullptr;
+}
+
+AST *WgslParser::_variable_decl() {
+    return nullptr;
+}
+
+AST *WgslParser::_enable_directive() {
+    return nullptr;
+}
+
+AST *WgslParser::_type_alias() {
+    return nullptr;
+}
+
+AST *WgslParser::_type_decl() {
+    return nullptr;
+}
+
+AST *WgslParser::_texture_sampler_types() {
+    return nullptr;
+}
+
+AST *WgslParser::_attribute() {
+    return nullptr;
+}
