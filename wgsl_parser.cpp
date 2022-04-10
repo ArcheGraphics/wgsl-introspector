@@ -106,10 +106,110 @@ Token WgslParser::_previous() {
 }
 
 std::unique_ptr<AST> WgslParser::_global_decl_or_directive() {
+    // semicolon
+    // global_variable_decl semicolon
+    // global_constant_decl semicolon
+    // type_alias semicolon
+    // struct_decl
+    // function_decl
+    // enable_directive
+
+    // Ignore any stand-alone semicolons
+    while (_match(Token::Tokens["semicolon"]) && !_isAtEnd());
+
+    if (_match(Token::Keywords["type"])) {
+        auto type = _type_alias();
+        _consume(Token::Tokens["semicolon"], "Expected ';'");
+        return type;
+    }
+
+    if (_match(Token::Keywords["enable"])) {
+        auto enable = _enable_directive();
+        _consume(Token::Tokens["semicolon"], "Expected ';'");
+        return enable;
+    }
+
+    // The following statements have an optional attribute*
+    auto attrs = _attribute();
+
+    if (_check(Token::Keywords["var"])) {
+        auto _var = _global_variable_decl();
+        _var->setChildVec("attributes", std::move(attrs));
+        _consume(Token::Tokens["semicolon"], "Expected ';'.");
+        return _var;
+    }
+
+    if (_check(Token::Keywords["let"])) {
+        auto _let = _global_constant_decl();
+        _let->setChildVec("attributes", std::move(attrs));
+        _consume(Token::Tokens["semicolon"], "Expected ';'.");
+        return _let;
+    }
+
+    if (_check(Token::Keywords["struct"])) {
+        auto _struct = _struct_decl();
+        _struct->setChildVec("attributes", std::move(attrs));
+        return _struct;
+    }
+
+    if (_check(Token::Keywords["fn"])) {
+        auto _fn = _function_decl();
+        _fn->setChildVec("attributes", std::move(attrs));
+        return _fn;
+    }
+
     return nullptr;
 }
 
-void WgslParser::_function_decl() {}
+std::unique_ptr<AST> WgslParser::_function_decl() {
+    // attribute* function_header compound_statement
+    // function_header: fn ident paren_left param_list? paren_right (arrow attribute* type_decl)?
+    if (!_match(Token::Keywords["fn"]))
+        return nullptr;
+
+    auto name = _consume(Token::Tokens["ident"], "Expected function name.").toString();
+
+    _consume(Token::Tokens["paren_left"], "Expected '(' for function arguments.");
+
+    std::vector<std::unique_ptr<AST>> args{};
+    if (!_check(Token::Tokens["paren_right"])) {
+        do {
+            auto argAttrs = _attribute();
+
+            auto name = _consume(Token::Tokens["ident"], "Expected argument name.").toString();
+
+            _consume(Token::Tokens["colon"], "Expected ':' for argument type.");
+
+            auto typeAttrs = _attribute();
+            auto type = _type_decl();
+            type->setChildVec("attributes", std::move(typeAttrs));
+
+            auto ast = std::make_unique<AST>("arg");
+            ast->setName(name);
+            ast->setChildVec("attributes", std::move(argAttrs));
+            ast->setChild("type", std::move(type));
+            args.emplace_back(std::move(ast));
+        } while (_match(Token::Tokens["comma"]));
+    }
+
+    _consume(Token::Tokens["paren_right"], "Expected ')' after function arguments.");
+
+    std::unique_ptr<AST> _return = nullptr;
+    if (_match(Token::Tokens["arrow"])) {
+        auto attrs = _attribute();
+        _return = _type_decl();
+        _return->setChildVec("attributes", std::move(attrs));
+    }
+
+    auto body = _compound_statement();
+
+    auto ast = std::make_unique<AST>("function");
+    ast->setName(name);
+    ast->setChildVec("args", std::move(args));
+    ast->setChild("return", std::move(_return));
+    ast->setChild("body", std::move(body));
+    return ast;
+}
 
 std::unique_ptr<AST> WgslParser::_compound_statement() {
     // brace_left statement* brace_right

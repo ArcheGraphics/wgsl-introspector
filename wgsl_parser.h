@@ -97,7 +97,7 @@ private:
 private:
     std::unique_ptr<AST> _global_decl_or_directive();
 
-    void _function_decl();
+    std::unique_ptr<AST> _function_decl();
 
     std::unique_ptr<AST> _compound_statement();
 
