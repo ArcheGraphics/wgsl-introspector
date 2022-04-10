@@ -40,6 +40,14 @@ public:
         return _name;
     }
 
+    void setNameVec(const std::vector<std::string> &nameVec) {
+        _nameVec = nameVec;
+    }
+
+    const std::vector<std::string> &nameVec() const {
+        return _nameVec;
+    }
+
 private:
     friend class WgslParser;
 
@@ -47,6 +55,7 @@ private:
     std::unordered_map<std::string, AST *> _child{};
     std::unordered_map<std::string, std::vector<AST *>> _childVec{};
     std::string _name;
+    std::vector<std::string> _nameVec;
 };
 
 
@@ -112,11 +121,11 @@ private:
 
     AST *_switch_statement();
 
-    AST *_switch_body();
+    std::vector<AST *> _switch_body();
 
-    AST *_case_selectors();
+    std::vector<std::string> _case_selectors();
 
-    AST *_case_body();
+    std::vector<AST *> _case_body();
 
     AST *_if_statement();
 
@@ -152,7 +161,7 @@ private:
 
     AST *_primary_expression();
 
-    AST *_argument_expression_list();
+    std::vector<AST*> _argument_expression_list();
 
     AST *_optional_paren_expression();
 

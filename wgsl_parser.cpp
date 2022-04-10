@@ -356,13 +356,13 @@ AST *WgslParser::_func_call_statement() {
     auto name = _consume(Token::Tokens["ident"], "Expected function name.");
     auto args = _argument_expression_list();
 
-    if (args == nullptr) {
+    if (args.empty()) {
         _current = savedPos;
         return nullptr;
     }
 
     std::unique_ptr<AST> ast = std::make_unique<AST>("call");
-    ast->setChild("args", args);
+    ast->setChildVec("args", args);
     ast->setName(name._type.name);
 
     auto astPtr = ast.get();
@@ -402,23 +402,123 @@ AST *WgslParser::_loop_statement() {
 }
 
 AST *WgslParser::_switch_statement() {
-    return nullptr;
+    // switch optional_paren_expression brace_left switch_body+ brace_right
+    if (!_match(Token::Keywords["switch"]))
+        return nullptr;
+
+    auto condition = _optional_paren_expression();
+    _consume(Token::Tokens["brace_left"], "");
+    auto body = _switch_body();
+    if (body.empty())
+        throw std::runtime_error("Expected 'case' or 'default'.");
+    _consume(Token::Tokens["brace_right"], "");
+
+    std::unique_ptr<AST> ast = std::make_unique<AST>("switch");
+    ast->setChildVec("body", body);
+    ast->setChild("condition", condition);
+
+    auto astPtr = ast.get();
+    _astPool.emplace_back(std::move(ast));
+    return astPtr;
 }
 
-AST *WgslParser::_switch_body() {
-    return nullptr;
+std::vector<AST *> WgslParser::_switch_body() {
+    // case case_selectors colon brace_left case_body? brace_right
+    // default colon brace_left case_body? brace_right
+    std::vector<AST *> cases{};
+    if (_match(Token::Keywords["case"])) {
+        _consume(Token::Keywords["case"], "");
+        auto selector = _case_selectors();
+        _consume(Token::Keywords["colon"], "Exected ':' for switch case.");
+        _consume(Token::Tokens["brace_left"], "Exected '{' for switch case.");
+        auto body = _case_body();
+        _consume(Token::Tokens["brace_right"], "Exected '}' for switch case.");
+
+        std::unique_ptr<AST> ast = std::make_unique<AST>("case");
+        ast->setChildVec("body", body);
+        ast->setNameVec(selector);
+
+        auto astPtr = ast.get();
+        _astPool.emplace_back(std::move(ast));
+        cases.push_back(astPtr);
+    }
+
+    if (_match(Token::Keywords["default"])) {
+        _consume(Token::Tokens["colon"], "Exected ':' for switch default.");
+        _consume(Token::Tokens["brace_left"], "Exected '{' for switch default.");
+        auto body = _case_body();
+        _consume(Token::Tokens["brace_right"], "Exected '}' for switch default.");
+
+        std::unique_ptr<AST> ast = std::make_unique<AST>("default");
+        ast->setChildVec("body", body);
+
+        auto astPtr = ast.get();
+        _astPool.emplace_back(std::move(ast));
+        cases.push_back(astPtr);
+    }
+
+    if (_check({Token::Keywords["default"], Token::Keywords["case"]})) {
+        auto _cases = _switch_body();
+        cases.push_back(_cases[0]);
+    }
+
+    return cases;
 }
 
-AST *WgslParser::_case_selectors() {
-    return nullptr;
+std::vector<std::string> WgslParser::_case_selectors() {
+    // const_literal (comma const_literal)* comma?
+    std::vector<std::string> selectors = {
+            _consume(Token::Tokens["const_literal"], "Expected constant literal").toString()};
+    while (_match(Token::Tokens["comma"])) {
+        selectors.push_back(_consume(Token::Tokens["const_literal"], "Expected constant literal").toString());
+    }
+    return selectors;
 }
 
-AST *WgslParser::_case_body() {
-    return nullptr;
+std::vector<AST *> WgslParser::_case_body() {
+    // statement case_body?
+    // fallthrough semicolon
+    if (_match(Token::Keywords["fallthrough"])) {
+        _consume(Token::Tokens["semicolon"], "");
+        return {};
+    }
+
+    auto statement = _statement();
+    if (statement == nullptr)
+        return {};
+
+    auto nextStatement = _case_body();
+    if (nextStatement.empty())
+        return {statement};
+
+    return {statement, nextStatement[0]};
 }
 
 AST *WgslParser::_if_statement() {
-    return nullptr;
+    // if optional_paren_expression compound_statement elseif_statement? else_statement?
+    if (!_match(Token::Keywords["if"]))
+        return nullptr;
+
+    auto condition = _optional_paren_expression();
+    auto block = _compound_statement();
+
+    AST *elseif = nullptr;
+    if (_match(Token::Keywords["elseif"]))
+        elseif = _elseif_statement();
+
+    AST *_else = nullptr;
+    if (_match(Token::Keywords["else"]))
+        _else = _compound_statement();
+
+    std::unique_ptr<AST> ast = std::make_unique<AST>("if");
+    ast->setChild("condition", condition);
+    ast->setChild("block", block);
+    ast->setChild("elseif", elseif);
+    ast->setChild("else", _else);
+
+    auto astPtr = ast.get();
+    _astPool.emplace_back(std::move(ast));
+    return astPtr;
 }
 
 AST *WgslParser::_elseif_statement() {
@@ -485,8 +585,21 @@ AST *WgslParser::_primary_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_argument_expression_list() {
-    return nullptr;
+std::vector<AST *> WgslParser::_argument_expression_list() {
+    // paren_left ((short_circuit_or_expression comma)* short_circuit_or_expression comma?)? paren_right
+    if (!_match(Token::Tokens["paren_left"]))
+        return {};
+
+    std::vector<AST *> args{};
+    do {
+        if (_check(Token::Tokens["paren_right"]))
+            break;
+        auto arg = _short_circuit_or_expression();
+        args.push_back(arg);
+    } while (_match(Token::Tokens["comma"]));
+    _consume(Token::Tokens["paren_right"], "Expected ')' for agument list");
+
+    return args;
 }
 
 AST *WgslParser::_optional_paren_expression() {
