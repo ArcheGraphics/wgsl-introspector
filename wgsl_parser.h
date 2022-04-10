@@ -27,7 +27,7 @@ public:
         _child[name] = std::move(ast);
     }
 
-    [[nodiscard]] AST* child(const std::string &name) const {
+    [[nodiscard]] AST *child(const std::string &name) const {
         auto iter = _child.find(name);
         if (iter != _child.end()) {
             return iter->second.get();
@@ -70,6 +70,23 @@ public:
         }
     }
 
+public:
+    uint32_t group() {
+        return _group;
+    }
+
+    void setGroup(uint32_t value) {
+        _group = value;
+    }
+
+    uint32_t binding() {
+        return _binding;
+    }
+
+    void setBinding(uint32_t value) {
+        _binding = value;
+    }
+
 private:
     friend class WgslParser;
 
@@ -78,6 +95,9 @@ private:
     std::unordered_map<std::string, std::unique_ptr<AST>> _child{};
     std::unordered_map<std::string, std::vector<std::unique_ptr<AST>>> _childVec{};
     std::unordered_map<std::string, std::vector<std::string>> _nameVec;
+
+    uint32_t _group;
+    uint32_t _binding;
 };
 
 
