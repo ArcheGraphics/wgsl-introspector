@@ -12,23 +12,23 @@
 
 class AST {
 public:
-    AST(const std::string &type) {
+    explicit AST(const std::string &type) {
         _type = type;
     }
 
-    void setChild(const std::string &name, AST *ast) {
-        _child[name] = ast;
+    void setChild(const std::string &name, std::unique_ptr<AST>&& ast) {
+        _child[name] = std::move(ast);
     }
 
-    const std::unordered_map<std::string, AST *> &child() const {
+    const std::unordered_map<std::string, std::unique_ptr<AST>> &child() const {
         return _child;
     }
 
-    void setChildVec(const std::string &name, const std::vector<AST *> &ast) {
-        _childVec[name] = ast;
+    void setChildVec(const std::string &name, std::vector<std::unique_ptr<AST>> &&ast) {
+        _childVec[name] = std::move(ast);
     }
 
-    const std::unordered_map<std::string, std::vector<AST *>> &childVec() const {
+    const std::unordered_map<std::string, std::vector<std::unique_ptr<AST>>> &childVec() const {
         return _childVec;
     }
 
@@ -52,8 +52,8 @@ private:
     friend class WgslParser;
 
     std::string _type;
-    std::unordered_map<std::string, AST *> _child{};
-    std::unordered_map<std::string, std::vector<AST *>> _childVec{};
+    std::unordered_map<std::string, std::unique_ptr<AST>> _child{};
+    std::unordered_map<std::string, std::vector<std::unique_ptr<AST>>> _childVec{};
     std::string _name;
     std::vector<std::string> _nameVec;
 };
@@ -63,9 +63,9 @@ class WgslParser {
 public:
     WgslParser() = default;
 
-    std::vector<AST *> parse(const std::string &code);
+    std::vector<std::unique_ptr<AST>> parse(const std::string &code);
 
-    std::vector<AST *> parse(const std::vector<Token> &tokens);
+    std::vector<std::unique_ptr<AST>> parse(const std::vector<Token> &tokens);
 
 private:
     void _initialize(const std::string &code);
@@ -95,103 +95,101 @@ private:
     Token _previous();
 
 private:
-    AST *_global_decl_or_directive();
+    std::unique_ptr<AST> _global_decl_or_directive();
 
     void _function_decl();
 
-    AST *_compound_statement();
+    std::unique_ptr<AST> _compound_statement();
 
-    AST *_statement();
+    std::unique_ptr<AST> _statement();
 
-    AST *_while_statement();
+    std::unique_ptr<AST> _while_statement();
 
-    AST *_for_statement();
+    std::unique_ptr<AST> _for_statement();
 
-    AST *_for_init();
+    std::unique_ptr<AST> _for_init();
 
-    AST *_for_increment();
+    std::unique_ptr<AST> _for_increment();
 
-    AST *_variable_statement();
+    std::unique_ptr<AST> _variable_statement();
 
-    AST *_assignment_statement();
+    std::unique_ptr<AST> _assignment_statement();
 
-    AST *_func_call_statement();
+    std::unique_ptr<AST> _func_call_statement();
 
-    AST *_loop_statement();
+    std::unique_ptr<AST> _loop_statement();
 
-    AST *_switch_statement();
+    std::unique_ptr<AST> _switch_statement();
 
-    std::vector<AST *> _switch_body();
+    std::vector<std::unique_ptr<AST>> _switch_body();
 
     std::vector<std::string> _case_selectors();
 
-    std::vector<AST *> _case_body();
+    std::vector<std::unique_ptr<AST>> _case_body();
 
-    AST *_if_statement();
+    std::unique_ptr<AST> _if_statement();
 
-    AST *_elseif_statement();
+    std::unique_ptr<AST> _elseif_statement();
 
-    AST *_return_statement();
+    std::unique_ptr<AST> _return_statement();
 
-    AST *_short_circuit_or_expression();
+    std::unique_ptr<AST> _short_circuit_or_expression();
 
-    AST *_short_circuit_and_expr();
+    std::unique_ptr<AST> _short_circuit_and_expr();
 
-    AST *_inclusive_or_expression();
+    std::unique_ptr<AST> _inclusive_or_expression();
 
-    AST *_exclusive_or_expression();
+    std::unique_ptr<AST> _exclusive_or_expression();
 
-    AST *_and_expression();
+    std::unique_ptr<AST> _and_expression();
 
-    AST *_equality_expression();
+    std::unique_ptr<AST> _equality_expression();
 
-    AST *_relational_expression();
+    std::unique_ptr<AST> _relational_expression();
 
-    AST *_shift_expression();
+    std::unique_ptr<AST> _shift_expression();
 
-    AST *_additive_expression();
+    std::unique_ptr<AST> _additive_expression();
 
-    AST *_multiplicative_expression();
+    std::unique_ptr<AST> _multiplicative_expression();
 
-    AST *_unary_expression();
+    std::unique_ptr<AST> _unary_expression();
 
-    AST *_singular_expression();
+    std::unique_ptr<AST> _singular_expression();
 
-    AST *_postfix_expression();
+    std::unique_ptr<AST> _postfix_expression();
 
-    AST *_primary_expression();
+    std::unique_ptr<AST> _primary_expression();
 
-    std::vector<AST*> _argument_expression_list();
+    std::vector<std::unique_ptr<AST>> _argument_expression_list();
 
-    AST *_optional_paren_expression();
+    std::unique_ptr<AST> _optional_paren_expression();
 
-    AST *_paren_expression();
+    std::unique_ptr<AST> _paren_expression();
 
-    AST *_struct_decl();
+    std::unique_ptr<AST> _struct_decl();
 
-    AST *_global_variable_decl();
+    std::unique_ptr<AST> _global_variable_decl();
 
-    AST *_global_constant_decl();
+    std::unique_ptr<AST> _global_constant_decl();
 
-    AST *_const_expression();
+    std::unique_ptr<AST> _const_expression();
 
-    AST *_variable_decl();
+    std::unique_ptr<AST> _variable_decl();
 
-    AST *_enable_directive();
+    std::unique_ptr<AST> _enable_directive();
 
-    AST *_type_alias();
+    std::unique_ptr<AST> _type_alias();
 
-    AST *_type_decl();
+    std::unique_ptr<AST> _type_decl();
 
-    AST *_texture_sampler_types();
+    std::unique_ptr<AST> _texture_sampler_types();
 
-    AST *_attribute();
+    std::unique_ptr<AST> _attribute();
 
 private:
     std::vector<Token> _tokens{};
     size_t _current = 0;
-
-    std::vector<std::unique_ptr<AST>> _astPool{};
 };
 
 #endif //WGSL_INTROSPECTOR_WGSL_PARSER_H

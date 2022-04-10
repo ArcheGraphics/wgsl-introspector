@@ -7,28 +7,28 @@
 #include "wgsl_parser.h"
 #include <memory>
 
-std::vector<AST *> WgslParser::parse(const std::string &code) {
+std::vector<std::unique_ptr<AST>> WgslParser::parse(const std::string &code) {
     _initialize(code);
 
-    std::vector<AST *> statements{};
+    std::vector<std::unique_ptr<AST>> statements{};
     while (!_isAtEnd()) {
         auto statement = _global_decl_or_directive();
         if (!statement)
             break;
-        statements.emplace_back(statement);
+        statements.emplace_back(std::move(statement));
     }
     return statements;
 }
 
-std::vector<AST *> WgslParser::parse(const std::vector<Token> &tokens) {
+std::vector<std::unique_ptr<AST>> WgslParser::parse(const std::vector<Token> &tokens) {
     _initialize(tokens);
 
-    std::vector<AST *> statements{};
+    std::vector<std::unique_ptr<AST>> statements{};
     while (!_isAtEnd()) {
         auto statement = _global_decl_or_directive();
         if (!statement)
             break;
-        statements.emplace_back(statement);
+        statements.emplace_back(std::move(statement));
     }
     return statements;
 }
@@ -105,31 +105,29 @@ Token WgslParser::_previous() {
     return _tokens[_current - 1];
 }
 
-AST *WgslParser::_global_decl_or_directive() {
+std::unique_ptr<AST> WgslParser::_global_decl_or_directive() {
     return nullptr;
 }
 
 void WgslParser::_function_decl() {}
 
-AST *WgslParser::_compound_statement() {
+std::unique_ptr<AST> WgslParser::_compound_statement() {
     // brace_left statement* brace_right
-    std::vector<AST *> statements{};
+    std::vector<std::unique_ptr<AST>> statements{};
     _consume(Token::Tokens["brace_left"], "Expected '{' for block.");
     while (!_check(Token::Tokens["brace_right"])) {
-        const auto statement = _statement();
+        auto statement = _statement();
         if (statement)
-            statements.emplace_back(statement);
+            statements.emplace_back(std::move(statement));
     }
     _consume(Token::Tokens["brace_right"], "Expected '}' for block.");
 
     auto ast = std::make_unique<AST>("");
-    ast->setChildVec("", statements);
-    auto astPtr = ast.get();
-    _astPool.emplace_back(std::move(ast));
-    return astPtr;
+    ast->setChildVec("", std::move(statements));
+    return ast;
 }
 
-AST *WgslParser::_statement() {
+std::unique_ptr<AST> WgslParser::_statement() {
     // semicolon
     // return_statement semicolon
     // if_statement
@@ -165,55 +163,47 @@ AST *WgslParser::_statement() {
     if (_check(Token::Tokens["brace_left"]))
         return _compound_statement();
 
-    AST *resultPtr = nullptr;
+    std::unique_ptr<AST> result = nullptr;
     if (_check(Token::Keywords["return"]))
-        resultPtr = _return_statement();
+        result = _return_statement();
     else if (_check({Token::Keywords["var"], Token::Keywords["let"]}))
-        resultPtr = _variable_statement();
+        result = _variable_statement();
     else if (_match(Token::Keywords["discard"])) {
-        auto result = std::make_unique<AST>("discard");
-        resultPtr = result.get();
-        _astPool.emplace_back(std::move(result));
+        result = std::make_unique<AST>("discard");
     } else if (_match(Token::Keywords["break"])) {
-        auto result = std::make_unique<AST>("break");
-        resultPtr = result.get();
-        _astPool.emplace_back(std::move(result));
+        result = std::make_unique<AST>("break");
     } else if (_match(Token::Keywords["continue"])) {
-        auto result = std::make_unique<AST>("continue");
-        resultPtr = result.get();
-        _astPool.emplace_back(std::move(result));
+        result = std::make_unique<AST>("continue");
     } else {
         auto state = _func_call_statement();
         if (state) {
-            resultPtr = state;
+            result = std::move(state);
         }
         state = _assignment_statement();
         if (state) {
-            resultPtr = state;
+            result = std::move(state);
         }
     }
 
-    if (resultPtr != nullptr)
+    if (result != nullptr)
         _consume(Token::Tokens["semicolon"], "Expected ';' after statement.");
 
-    return resultPtr;
+    return result;
 }
 
-AST *WgslParser::_while_statement() {
+std::unique_ptr<AST> WgslParser::_while_statement() {
     if (!_match(Token::Keywords["while"]))
         return nullptr;
     auto condition = _optional_paren_expression();
     auto block = _compound_statement();
 
     std::unique_ptr<AST> ast = std::make_unique<AST>("while");
-    ast->setChild("condition", condition);
-    ast->setChild("block", block);
-    auto astPtr = ast.get();
-    _astPool.emplace_back(std::move(ast));
-    return astPtr;
+    ast->setChild("condition", std::move(condition));
+    ast->setChild("block", std::move(block));
+    return ast;
 }
 
-AST *WgslParser::_for_statement() {
+std::unique_ptr<AST> WgslParser::_for_statement() {
     // for paren_left for_header paren_right compound_statement
     if (!_match(Token::Keywords["for"]))
         return nullptr;
@@ -233,17 +223,14 @@ AST *WgslParser::_for_statement() {
     auto body = _compound_statement();
 
     std::unique_ptr<AST> ast = std::make_unique<AST>("for");
-    ast->setChild("init", init);
-    ast->setChild("condition", condition);
-    ast->setChild("increment", increment);
-    ast->setChild("body", body);
-
-    auto astPtr = ast.get();
-    _astPool.emplace_back(std::move(ast));
-    return astPtr;
+    ast->setChild("init", std::move(init));
+    ast->setChild("condition", std::move(condition));
+    ast->setChild("increment", std::move(increment));
+    ast->setChild("body", std::move(body));
+    return ast;
 }
 
-AST *WgslParser::_for_init() {
+std::unique_ptr<AST> WgslParser::_for_init() {
     // (variable_statement assignment_statement func_call_statement)?
     auto state = _variable_statement();
     if (state) {
@@ -262,7 +249,7 @@ AST *WgslParser::_for_init() {
     return nullptr;
 }
 
-AST *WgslParser::_for_increment() {
+std::unique_ptr<AST> WgslParser::_for_increment() {
     // (assignment_statement func_call_statement)?
     auto state = _func_call_statement();
     if (state) {
@@ -276,53 +263,46 @@ AST *WgslParser::_for_increment() {
     return nullptr;
 }
 
-AST *WgslParser::_variable_statement() {
+std::unique_ptr<AST> WgslParser::_variable_statement() {
     // variable_decl
     // variable_decl equal short_circuit_or_expression
     // let (ident variable_ident_decl) equal short_circuit_or_expression
     if (_check(Token::Keywords["var"])) {
         auto _var = _variable_decl();
-        AST *value = nullptr;
+        std::unique_ptr<AST> value = nullptr;
         if (_match(Token::Tokens["equal"]))
             value = _short_circuit_or_expression();
 
-        std::unordered_map<std::string, AST *> child{
-                {"var",   _var},
-                {"value", value}
-        };
         std::unique_ptr<AST> ast = std::make_unique<AST>("var");
-        auto astPtr = ast.get();
-        _astPool.emplace_back(std::move(ast));
-        return astPtr;
+        ast->setChild("var", std::move(_var));
+        ast->setChild("value", std::move(value));
+        return ast;
     }
 
     if (_match(Token::Keywords["let"])) {
         auto name = _consume(Token::Tokens["ident"], "Expected name for let.").toString();
-        AST *type = nullptr;
+        std::unique_ptr<AST> type = nullptr;
         if (_match(Token::Tokens["colon"])) {
             auto typeAttrs = _attribute();
             type = _type_decl();
-            type->_child["attributes"] = typeAttrs;
+            type->_child["attributes"] = std::move(typeAttrs);
         }
         _consume(Token::Tokens["equal"], "Expected '=' for let.");
         auto value = _short_circuit_or_expression();
 
         std::unique_ptr<AST> ast = std::make_unique<AST>("let");
-        ast->setChild("type", type);
-        ast->setChild("value", value);
+        ast->setChild("type", std::move(type));
+        ast->setChild("value", std::move(value));
         ast->setName(name);
-
-        auto astPtr = ast.get();
-        _astPool.emplace_back(std::move(ast));
-        return astPtr;
+        return ast;
     }
 
     return nullptr;
 }
 
-AST *WgslParser::_assignment_statement() {
+std::unique_ptr<AST> WgslParser::_assignment_statement() {
     // (unary_expression underscore) equal short_circuit_or_expression
-    AST *_var = nullptr;
+    std::unique_ptr<AST> _var = nullptr;
 
     if (_check(Token::Tokens["brace_right"]))
         return nullptr;
@@ -339,15 +319,12 @@ AST *WgslParser::_assignment_statement() {
     auto value = _short_circuit_or_expression();
 
     std::unique_ptr<AST> ast = std::make_unique<AST>("assign");
-    ast->setChild("var", _var);
-    ast->setChild("value", value);
-
-    auto astPtr = ast.get();
-    _astPool.emplace_back(std::move(ast));
-    return astPtr;
+    ast->setChild("var", std::move(_var));
+    ast->setChild("value", std::move(value));
+    return ast;
 }
 
-AST *WgslParser::_func_call_statement() {
+std::unique_ptr<AST> WgslParser::_func_call_statement() {
     // ident argument_expression_list
     if (!_check(Token::Tokens["ident"]))
         return nullptr;
@@ -362,15 +339,12 @@ AST *WgslParser::_func_call_statement() {
     }
 
     std::unique_ptr<AST> ast = std::make_unique<AST>("call");
-    ast->setChildVec("args", args);
+    ast->setChildVec("args", std::move(args));
     ast->setName(name._type.name);
-
-    auto astPtr = ast.get();
-    _astPool.emplace_back(std::move(ast));
-    return astPtr;
+    return ast;
 }
 
-AST *WgslParser::_loop_statement() {
+std::unique_ptr<AST> WgslParser::_loop_statement() {
     // loop brace_left statement* continuing_statement? brace_right
     if (!_match(Token::Keywords["loop"]))
         return nullptr;
@@ -378,30 +352,27 @@ AST *WgslParser::_loop_statement() {
     _consume(Token::Tokens["brace_left"], "Expected '{' for loop.");
 
     // statement*
-    std::vector<AST *> statements{};
+    std::vector<std::unique_ptr<AST>> statements{};
     auto statement = _statement();
     while (statement != nullptr) {
-        statements.push_back(statement);
+        statements.emplace_back(std::move(statement));
         statement = _statement();
     }
 
     // continuing_statement: continuing compound_statement
-    AST *continuing = nullptr;
+    std::unique_ptr<AST> continuing = nullptr;
     if (_match(Token::Keywords["continuing"]))
         continuing = _compound_statement();
 
     _consume(Token::Tokens["brace_right"], "Expected '}' for loop.");
 
     std::unique_ptr<AST> ast = std::make_unique<AST>("loop");
-    ast->setChildVec("statements", statements);
-    ast->setChild("continuing", continuing);
-
-    auto astPtr = ast.get();
-    _astPool.emplace_back(std::move(ast));
-    return astPtr;
+    ast->setChildVec("statements", std::move(statements));
+    ast->setChild("continuing", std::move(continuing));
+    return ast;
 }
 
-AST *WgslParser::_switch_statement() {
+std::unique_ptr<AST> WgslParser::_switch_statement() {
     // switch optional_paren_expression brace_left switch_body+ brace_right
     if (!_match(Token::Keywords["switch"]))
         return nullptr;
@@ -414,18 +385,15 @@ AST *WgslParser::_switch_statement() {
     _consume(Token::Tokens["brace_right"], "");
 
     std::unique_ptr<AST> ast = std::make_unique<AST>("switch");
-    ast->setChildVec("body", body);
-    ast->setChild("condition", condition);
-
-    auto astPtr = ast.get();
-    _astPool.emplace_back(std::move(ast));
-    return astPtr;
+    ast->setChildVec("body", std::move(body));
+    ast->setChild("condition", std::move(condition));
+    return ast;
 }
 
-std::vector<AST *> WgslParser::_switch_body() {
+std::vector<std::unique_ptr<AST>> WgslParser::_switch_body() {
     // case case_selectors colon brace_left case_body? brace_right
     // default colon brace_left case_body? brace_right
-    std::vector<AST *> cases{};
+    std::vector<std::unique_ptr<AST>> cases{};
     if (_match(Token::Keywords["case"])) {
         _consume(Token::Keywords["case"], "");
         auto selector = _case_selectors();
@@ -435,12 +403,9 @@ std::vector<AST *> WgslParser::_switch_body() {
         _consume(Token::Tokens["brace_right"], "Exected '}' for switch case.");
 
         std::unique_ptr<AST> ast = std::make_unique<AST>("case");
-        ast->setChildVec("body", body);
+        ast->setChildVec("body", std::move(body));
         ast->setNameVec(selector);
-
-        auto astPtr = ast.get();
-        _astPool.emplace_back(std::move(ast));
-        cases.push_back(astPtr);
+        cases.emplace_back(std::move(ast));
     }
 
     if (_match(Token::Keywords["default"])) {
@@ -450,16 +415,13 @@ std::vector<AST *> WgslParser::_switch_body() {
         _consume(Token::Tokens["brace_right"], "Exected '}' for switch default.");
 
         std::unique_ptr<AST> ast = std::make_unique<AST>("default");
-        ast->setChildVec("body", body);
-
-        auto astPtr = ast.get();
-        _astPool.emplace_back(std::move(ast));
-        cases.push_back(astPtr);
+        ast->setChildVec("body", std::move(body));
+        cases.emplace_back(std::move(ast));
     }
 
     if (_check({Token::Keywords["default"], Token::Keywords["case"]})) {
         auto _cases = _switch_body();
-        cases.push_back(_cases[0]);
+        cases.emplace_back(std::move(_cases[0]));
     }
 
     return cases;
@@ -475,7 +437,7 @@ std::vector<std::string> WgslParser::_case_selectors() {
     return selectors;
 }
 
-std::vector<AST *> WgslParser::_case_body() {
+std::vector<std::unique_ptr<AST>> WgslParser::_case_body() {
     // statement case_body?
     // fallthrough semicolon
     if (_match(Token::Keywords["fallthrough"])) {
@@ -488,13 +450,19 @@ std::vector<AST *> WgslParser::_case_body() {
         return {};
 
     auto nextStatement = _case_body();
-    if (nextStatement.empty())
-        return {statement};
+    if (nextStatement.empty()) {
+        std::vector<std::unique_ptr<AST>> result(1);
+        result[0] = std::move(statement);
+        return result;
+    }
 
-    return {statement, nextStatement[0]};
+    std::vector<std::unique_ptr<AST>> result(2);
+    result[0] = std::move(statement);
+    result[1] = std::move(nextStatement[0]);
+    return result;
 }
 
-AST *WgslParser::_if_statement() {
+std::unique_ptr<AST> WgslParser::_if_statement() {
     // if optional_paren_expression compound_statement elseif_statement? else_statement?
     if (!_match(Token::Keywords["if"]))
         return nullptr;
@@ -502,150 +470,147 @@ AST *WgslParser::_if_statement() {
     auto condition = _optional_paren_expression();
     auto block = _compound_statement();
 
-    AST *elseif = nullptr;
+    std::unique_ptr<AST> elseif = nullptr;
     if (_match(Token::Keywords["elseif"]))
         elseif = _elseif_statement();
 
-    AST *_else = nullptr;
+    std::unique_ptr<AST> _else = nullptr;
     if (_match(Token::Keywords["else"]))
         _else = _compound_statement();
 
     std::unique_ptr<AST> ast = std::make_unique<AST>("if");
-    ast->setChild("condition", condition);
-    ast->setChild("block", block);
-    ast->setChild("elseif", elseif);
-    ast->setChild("else", _else);
-
-    auto astPtr = ast.get();
-    _astPool.emplace_back(std::move(ast));
-    return astPtr;
+    ast->setChild("condition", std::move(condition));
+    ast->setChild("block", std::move(block));
+    ast->setChild("elseif", std::move(elseif));
+    ast->setChild("else", std::move(_else));
+    return ast;
 }
 
-AST *WgslParser::_elseif_statement() {
+std::unique_ptr<AST> WgslParser::_elseif_statement() {
     return nullptr;
 }
 
-AST *WgslParser::_return_statement() {
+std::unique_ptr<AST> WgslParser::_return_statement() {
     return nullptr;
 }
 
-AST *WgslParser::_short_circuit_or_expression() {
+std::unique_ptr<AST> WgslParser::_short_circuit_or_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_short_circuit_and_expr() {
+std::unique_ptr<AST> WgslParser::_short_circuit_and_expr() {
     return nullptr;
 }
 
-AST *WgslParser::_inclusive_or_expression() {
+std::unique_ptr<AST> WgslParser::_inclusive_or_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_exclusive_or_expression() {
+std::unique_ptr<AST> WgslParser::_exclusive_or_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_and_expression() {
+std::unique_ptr<AST> WgslParser::_and_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_equality_expression() {
+std::unique_ptr<AST> WgslParser::_equality_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_relational_expression() {
+std::unique_ptr<AST> WgslParser::_relational_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_shift_expression() {
+std::unique_ptr<AST> WgslParser::_shift_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_additive_expression() {
+std::unique_ptr<AST> WgslParser::_additive_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_multiplicative_expression() {
+std::unique_ptr<AST> WgslParser::_multiplicative_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_unary_expression() {
+std::unique_ptr<AST> WgslParser::_unary_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_singular_expression() {
+std::unique_ptr<AST> WgslParser::_singular_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_postfix_expression() {
+std::unique_ptr<AST> WgslParser::_postfix_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_primary_expression() {
+std::unique_ptr<AST> WgslParser::_primary_expression() {
     return nullptr;
 }
 
-std::vector<AST *> WgslParser::_argument_expression_list() {
+std::vector<std::unique_ptr<AST>> WgslParser::_argument_expression_list() {
     // paren_left ((short_circuit_or_expression comma)* short_circuit_or_expression comma?)? paren_right
     if (!_match(Token::Tokens["paren_left"]))
         return {};
 
-    std::vector<AST *> args{};
+    std::vector<std::unique_ptr<AST>> args{};
     do {
         if (_check(Token::Tokens["paren_right"]))
             break;
         auto arg = _short_circuit_or_expression();
-        args.push_back(arg);
+        args.emplace_back(std::move(arg));
     } while (_match(Token::Tokens["comma"]));
     _consume(Token::Tokens["paren_right"], "Expected ')' for agument list");
 
     return args;
 }
 
-AST *WgslParser::_optional_paren_expression() {
+std::unique_ptr<AST> WgslParser::_optional_paren_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_paren_expression() {
+std::unique_ptr<AST> WgslParser::_paren_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_struct_decl() {
+std::unique_ptr<AST> WgslParser::_struct_decl() {
     return nullptr;
 }
 
-AST *WgslParser::_global_variable_decl() {
+std::unique_ptr<AST> WgslParser::_global_variable_decl() {
     return nullptr;
 }
 
-AST *WgslParser::_global_constant_decl() {
+std::unique_ptr<AST> WgslParser::_global_constant_decl() {
     return nullptr;
 }
 
-AST *WgslParser::_const_expression() {
+std::unique_ptr<AST> WgslParser::_const_expression() {
     return nullptr;
 }
 
-AST *WgslParser::_variable_decl() {
+std::unique_ptr<AST> WgslParser::_variable_decl() {
     return nullptr;
 }
 
-AST *WgslParser::_enable_directive() {
+std::unique_ptr<AST> WgslParser::_enable_directive() {
     return nullptr;
 }
 
-AST *WgslParser::_type_alias() {
+std::unique_ptr<AST> WgslParser::_type_alias() {
     return nullptr;
 }
 
-AST *WgslParser::_type_decl() {
+std::unique_ptr<AST> WgslParser::_type_decl() {
     return nullptr;
 }
 
-AST *WgslParser::_texture_sampler_types() {
+std::unique_ptr<AST> WgslParser::_texture_sampler_types() {
     return nullptr;
 }
 
-AST *WgslParser::_attribute() {
+std::unique_ptr<AST> WgslParser::_attribute() {
     return nullptr;
 }
