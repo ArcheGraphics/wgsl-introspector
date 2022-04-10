@@ -20,7 +20,7 @@ public:
         _child[name] = std::move(ast);
     }
 
-    const std::unordered_map<std::string, std::unique_ptr<AST>> &child() const {
+    [[nodiscard]] const std::unordered_map<std::string, std::unique_ptr<AST>> &child() const {
         return _child;
     }
 
@@ -28,7 +28,7 @@ public:
         _childVec[name] = std::move(ast);
     }
 
-    const std::unordered_map<std::string, std::vector<std::unique_ptr<AST>>> &childVec() const {
+    [[nodiscard]] const std::unordered_map<std::string, std::vector<std::unique_ptr<AST>>> &childVec() const {
         return _childVec;
     }
 
@@ -36,7 +36,7 @@ public:
         _name = name;
     }
 
-    const std::string &name() const {
+    [[nodiscard]] const std::string &name() const {
         return _name;
     }
 
@@ -44,7 +44,7 @@ public:
         _nameVec = nameVec;
     }
 
-    const std::vector<std::string> &nameVec() const {
+    [[nodiscard]] const std::vector<std::string> &nameVec() const {
         return _nameVec;
     }
 
