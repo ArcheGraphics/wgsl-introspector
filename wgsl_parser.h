@@ -16,7 +16,7 @@ public:
         _type = type;
     }
 
-    void setChild(const std::string &name, std::unique_ptr<AST>&& ast) {
+    void setChild(const std::string &name, std::unique_ptr<AST> &&ast) {
         _child[name] = std::move(ast);
     }
 
@@ -129,7 +129,7 @@ private:
 
     std::unique_ptr<AST> _if_statement();
 
-    std::unique_ptr<AST> _elseif_statement();
+    std::vector<std::unique_ptr<AST>> _elseif_statement();
 
     std::unique_ptr<AST> _return_statement();
 

@@ -470,7 +470,7 @@ std::unique_ptr<AST> WgslParser::_if_statement() {
     auto condition = _optional_paren_expression();
     auto block = _compound_statement();
 
-    std::unique_ptr<AST> elseif = nullptr;
+    std::vector<std::unique_ptr<AST>> elseif{};
     if (_match(Token::Keywords["elseif"]))
         elseif = _elseif_statement();
 
@@ -481,73 +481,283 @@ std::unique_ptr<AST> WgslParser::_if_statement() {
     std::unique_ptr<AST> ast = std::make_unique<AST>("if");
     ast->setChild("condition", std::move(condition));
     ast->setChild("block", std::move(block));
-    ast->setChild("elseif", std::move(elseif));
+    ast->setChildVec("elseif", std::move(elseif));
     ast->setChild("else", std::move(_else));
     return ast;
 }
 
-std::unique_ptr<AST> WgslParser::_elseif_statement() {
-    return nullptr;
+std::vector<std::unique_ptr<AST>> WgslParser::_elseif_statement() {
+    // else_if optional_paren_expression compound_statement elseif_statement?
+    std::vector<std::unique_ptr<AST>> elseif{};
+    auto condition = _optional_paren_expression();
+    auto block = _compound_statement();
+    auto ast = std::make_unique<AST>("elseif");
+    ast->setChild("condition", std::move(condition));
+    ast->setChild("block", std::move(block));
+    elseif.emplace_back(std::move(ast));
+    if (_match(Token::Keywords["elseif"]))
+        elseif.emplace_back(std::move(_elseif_statement()[0]));
+    return elseif;
 }
 
 std::unique_ptr<AST> WgslParser::_return_statement() {
-    return nullptr;
+    // return short_circuit_or_expression?
+    if (!_match(Token::Keywords["return"]))
+        return nullptr;
+    auto value = _short_circuit_or_expression();
+
+    auto ast = std::make_unique<AST>("return");
+    ast->setChild("value", std::move(value));
+    return ast;
 }
 
 std::unique_ptr<AST> WgslParser::_short_circuit_or_expression() {
-    return nullptr;
+    // short_circuit_and_expression
+    // short_circuit_or_expression or_or short_circuit_and_expression
+    auto expr = _short_circuit_and_expr();
+    while (_match(Token::Tokens["or_or"])) {
+        auto ast = std::make_unique<AST>("compareOp");
+        ast->setChild("left", std::move(expr));
+        ast->setChild("right", std::move(_short_circuit_and_expr()));
+        ast->setName(_previous().toString());
+        expr = std::move(ast);
+    }
+    return expr;
 }
 
 std::unique_ptr<AST> WgslParser::_short_circuit_and_expr() {
-    return nullptr;
+    // inclusive_or_expression
+    // short_circuit_and_expression and_and inclusive_or_expression
+    auto expr = _inclusive_or_expression();
+    while (_match(Token::Tokens["and_and"])) {
+        auto ast = std::make_unique<AST>("compareOp");
+        ast->setChild("left", std::move(expr));
+        ast->setChild("right", _inclusive_or_expression());
+        ast->setName(_previous().toString());
+        expr = std::move(ast);
+    }
+    return expr;
 }
 
 std::unique_ptr<AST> WgslParser::_inclusive_or_expression() {
-    return nullptr;
+    // exclusive_or_expression
+    // inclusive_or_expression or exclusive_or_expression
+    auto expr = _exclusive_or_expression();
+    while (_match(Token::Tokens["or"])) {
+        auto ast = std::make_unique<AST>("binaryOp");
+        ast->setChild("left", std::move(expr));
+        ast->setChild("right", _exclusive_or_expression());
+        ast->setName(_previous().toString());
+        expr = std::move(ast);
+    }
+    return expr;
 }
 
 std::unique_ptr<AST> WgslParser::_exclusive_or_expression() {
-    return nullptr;
+    // and_expression
+    // exclusive_or_expression xor and_expression
+    auto expr = _and_expression();
+    while (_match(Token::Tokens["xor"])) {
+        auto ast = std::make_unique<AST>("binaryOp");
+        ast->setChild("left", std::move(expr));
+        ast->setChild("right", _and_expression());
+        ast->setName(_previous().toString());
+        expr = std::move(ast);
+    }
+    return expr;
 }
 
 std::unique_ptr<AST> WgslParser::_and_expression() {
-    return nullptr;
+    // equality_expression
+    // and_expression and equality_expression
+    auto expr = _equality_expression();
+    while (_match(Token::Tokens["and"])) {
+        auto ast = std::make_unique<AST>("binaryOp");
+        ast->setChild("left", std::move(expr));
+        ast->setChild("right", _equality_expression());
+        ast->setName(_previous().toString());
+        expr = std::move(ast);
+    }
+    return expr;
 }
 
 std::unique_ptr<AST> WgslParser::_equality_expression() {
-    return nullptr;
+    // relational_expression
+    // relational_expression equal_equal relational_expression
+    // relational_expression not_equal relational_expression
+    auto expr = _relational_expression();
+    if (_match({Token::Tokens["equal_equal"], Token::Tokens["not_equal"]})) {
+        auto ast = std::make_unique<AST>("compareOp");
+        ast->setChild("left", std::move(expr));
+        ast->setChild("right", _relational_expression());
+        ast->setName(_previous().toString());
+        return ast;
+    }
+    return expr;
 }
 
 std::unique_ptr<AST> WgslParser::_relational_expression() {
-    return nullptr;
+    // shift_expression
+    // relational_expression less_than shift_expression
+    // relational_expression greater_than shift_expression
+    // relational_expression less_than_equal shift_expression
+    // relational_expression greater_than_equal shift_expression
+    auto expr = _shift_expression();
+    while (_match({Token::Tokens["less_than"], Token::Tokens["greater_than"],
+                   Token::Tokens["less_than_equal"], Token::Tokens["greater_than_equal"]})) {
+        auto ast = std::make_unique<AST>("compareOp");
+        ast->setChild("left", std::move(expr));
+        ast->setChild("right", _shift_expression());
+        ast->setName(_previous().toString());
+        expr = std::move(ast);
+    }
+    return expr;
 }
 
 std::unique_ptr<AST> WgslParser::_shift_expression() {
-    return nullptr;
+    // additive_expression
+    // shift_expression shift_left additive_expression
+    // shift_expression shift_right additive_expression
+    auto expr = _additive_expression();
+    while (_match({Token::Tokens["shift_left"], Token::Tokens["shift_right"]})) {
+        auto ast = std::make_unique<AST>("binaryOp");
+        ast->setChild("left", std::move(expr));
+        ast->setChild("right", _additive_expression());
+        ast->setName(_previous().toString());
+        expr = std::move(ast);
+    }
+    return expr;
 }
 
 std::unique_ptr<AST> WgslParser::_additive_expression() {
-    return nullptr;
+    // multiplicative_expression
+    // additive_expression plus multiplicative_expression
+    // additive_expression minus multiplicative_expression
+    auto expr = _multiplicative_expression();
+    while (_match({Token::Tokens["plus"], Token::Tokens["minus"]})) {
+        auto ast = std::make_unique<AST>("binaryOp");
+        ast->setChild("left", std::move(expr));
+        ast->setChild("right", _multiplicative_expression());
+        ast->setName(_previous().toString());
+        expr = std::move(ast);
+    }
+    return expr;
 }
 
 std::unique_ptr<AST> WgslParser::_multiplicative_expression() {
-    return nullptr;
+    // unary_expression
+    // multiplicative_expression star unary_expression
+    // multiplicative_expression forward_slash unary_expression
+    // multiplicative_expression modulo unary_expression
+    auto expr = _unary_expression();
+    while (_match({Token::Tokens["star"], Token::Tokens["forward_slash"], Token::Tokens["modulo"]})) {
+        auto ast = std::make_unique<AST>("binaryOp");
+        ast->setChild("left", std::move(expr));
+        ast->setChild("right", _unary_expression());
+        ast->setName(_previous().toString());
+        expr = std::move(ast);
+    }
+    return expr;
 }
 
 std::unique_ptr<AST> WgslParser::_unary_expression() {
-    return nullptr;
+    // singular_expression
+    // minus unary_expression
+    // bang unary_expression
+    // tilde unary_expression
+    // star unary_expression
+    // and unary_expression
+    if (_match({Token::Tokens["minus"], Token::Tokens["bang"],
+                Token::Tokens["tilde"], Token::Tokens["star"], Token::Tokens["and"]})) {
+        auto ast = std::make_unique<AST>("unaryOp");
+        ast->setChild("right", _unary_expression());
+        ast->setName(_previous().toString());
+        return ast;
+    }
+    return _singular_expression();
 }
 
 std::unique_ptr<AST> WgslParser::_singular_expression() {
-    return nullptr;
+    // primary_expression postfix_expression ?
+    auto expr = _primary_expression();
+    auto p = _postfix_expression();
+    if (p)
+        expr->setChild("postfix", std::move(p));
+    return expr;
 }
 
 std::unique_ptr<AST> WgslParser::_postfix_expression() {
+    // bracket_left short_circuit_or_expression bracket_right postfix_expression?
+    if (_match(Token::Tokens["bracket_left"])) {
+        auto expr = _short_circuit_or_expression();
+        _consume(Token::Tokens["bracket_right"], "Expected ']'.");
+        auto p = _postfix_expression();
+        if (p)
+            expr->setChild("postfix", std::move(p));
+        return expr;
+    }
+
+    // period ident postfix_expression?
+//    if (_match(Token::Tokens["period"])) {
+//        auto name = _consume(Token::Tokens["ident"], "Expected member name.");
+//        auto p = _postfix_expression();
+//        if (p)
+//            name.postfix = p;
+//        return name;
+//    }
+
     return nullptr;
 }
 
 std::unique_ptr<AST> WgslParser::_primary_expression() {
-    return nullptr;
+    // ident argument_expression_list?
+    if (_match(Token::Tokens["ident"])) {
+        auto name = _previous().toString();
+        if (_check(Token::Tokens["paren_left"])) {
+            auto args = _argument_expression_list();
+
+            auto ast = std::make_unique<AST>("call_expr");
+            ast->setName(name);
+            ast->setChildVec("args", std::move(args));
+            return ast;
+        }
+        auto ast = std::make_unique<AST>("variable_expr");
+        ast->setName(name);
+        return ast;
+    }
+
+    // const_literal
+    if (_match(Token::Tokens["const_literal"])) {
+        auto ast = std::make_unique<AST>("literal_expr");
+        ast->setName(_previous().toString());
+    }
+
+    // paren_expression
+    if (_check(Token::Tokens["paren_left"])) {
+        return _paren_expression();
+    }
+
+    // bitcast less_than type_decl greater_than paren_expression
+    if (_match(Token::Keywords["bitcast"])) {
+        _consume(Token::Tokens["less_than"], "Expected '<'.");
+        auto type = _type_decl();
+        _consume(Token::Tokens["greater_than"], "Expected '>'.");
+        auto value = _paren_expression();
+
+        auto ast = std::make_unique<AST>("bitcast_expr");
+        ast->setChild("type", std::move(type));
+        ast->setChild("value", std::move(value));
+        return ast;
+    }
+
+    // type_decl argument_expression_list
+    auto type = _type_decl();
+    auto args = _argument_expression_list();
+
+    auto ast = std::make_unique<AST>("typecast_expr");
+    ast->setChild("type", std::move(type));
+    ast->setChildVec("args", std::move(args));
+    return ast;
 }
 
 std::vector<std::unique_ptr<AST>> WgslParser::_argument_expression_list() {
