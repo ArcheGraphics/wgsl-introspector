@@ -185,7 +185,7 @@ private:
 
     std::unique_ptr<AST> _texture_sampler_types();
 
-    std::unique_ptr<AST> _attribute();
+    std::vector<std::unique_ptr<AST>> _attribute();
 
 private:
     std::vector<Token> _tokens{};
