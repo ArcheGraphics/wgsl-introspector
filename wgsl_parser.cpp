@@ -285,7 +285,7 @@ std::unique_ptr<AST> WgslParser::_variable_statement() {
         if (_match(Token::Tokens["colon"])) {
             auto typeAttrs = _attribute();
             type = _type_decl();
-            type->_child["attributes"] = std::move(typeAttrs);
+            type->setChildVec("attributes", std::move(typeAttrs));
         }
         _consume(Token::Tokens["equal"], "Expected '=' for let.");
         auto value = _short_circuit_or_expression();
@@ -819,7 +819,7 @@ std::unique_ptr<AST> WgslParser::_struct_decl() {
 
         auto typeAttrs = _attribute();
         auto memberType = _type_decl();
-        memberType->setChild("attributes", std::move(typeAttrs));
+        memberType->setChildVec("attributes", std::move(typeAttrs));
 
         if (!_check(Token::Tokens["brace_right"]))
             _consume(Token::Tokens["comma"], "Expected ',' for struct member.");
@@ -827,7 +827,7 @@ std::unique_ptr<AST> WgslParser::_struct_decl() {
             _match(Token::Tokens["comma"]); // trailing comma optional.
 
         auto ast = std::make_unique<AST>("member");
-        ast->setChild("attributes", std::move(memberAttrs));
+        ast->setChildVec("attributes", std::move(memberAttrs));
         ast->setChild("type", std::move(memberType));
         ast->setName(memberName);
         members.emplace_back(std::move(ast));
@@ -859,7 +859,7 @@ std::unique_ptr<AST> WgslParser::_global_constant_decl() {
     if (_match(Token::Tokens["colon"])) {
         auto attrs = _attribute();
         type = _type_decl();
-        type->setChild("attributes", std::move(attrs));
+        type->setChildVec("attributes", std::move(attrs));
     }
     std::unique_ptr<AST> value = nullptr;
     if (_match(Token::Tokens["equal"])) {
@@ -905,12 +905,10 @@ std::unique_ptr<AST> WgslParser::_variable_decl() {
         return nullptr;
 
     // variable_qualifier: less_than storage_class (comma access_mode)? greater_than
-    std::unique_ptr<AST> storage = nullptr;
-    std::unique_ptr<AST> access = nullptr;
     if (_match(Token::Tokens["less_than"])) {
-        storage = _consume(Token::Tokens["storage_class"], "Expected storage_class.").toString();
+        _consume(Token::Tokens["storage_class"], "Expected storage_class.").toString();
         if (_match(Token::Tokens["comma"]))
-            access = _consume(Token::Tokens["access_mode"], "Expected access_mode.").toString();
+            _consume(Token::Tokens["access_mode"], "Expected access_mode.").toString();
         _consume(Token::Tokens["greater_than"], "Expected '>'.");
     }
 
@@ -919,13 +917,11 @@ std::unique_ptr<AST> WgslParser::_variable_decl() {
     if (_match(Token::Tokens["colon"])) {
         auto attrs = _attribute();
         type = _type_decl();
-        type->setChild("attributes", std::move(attrs));
+        type->setChildVec("attributes", std::move(attrs));
     }
 
     auto ast = std::make_unique<AST>("var");
     ast->setChild("type", std::move(type));
-    ast->setChildVec("storage", std::move(storage));
-    ast->setChildVec("access", std::move(access));
     ast->setName(name.toString());
     return ast;
 }
@@ -988,15 +984,13 @@ std::unique_ptr<AST> WgslParser::_type_decl() {
         auto type = _advance().toString();
         _consume(Token::Tokens["less_than"], "Expected '<' for type.");
         auto format = _type_decl();
-        std::unique_ptr<AST> access = nullptr;
         if (_match(Token::Tokens["comma"]))
-            access = _consume(Token::Tokens["access_mode"], "Expected access_mode for pointer").toString();
+            _consume(Token::Tokens["access_mode"], "Expected access_mode for pointer").toString();
         _consume(Token::Tokens["greater_than"], "Expected '>' for type.");
 
         auto ast = std::make_unique<AST>("type");
         ast->setName(type);
         ast->setChild("format", std::move(format));
-        ast->setChild("access", std::move(access));
         return ast;
     }
 
@@ -1007,16 +1001,13 @@ std::unique_ptr<AST> WgslParser::_type_decl() {
         auto storage = _consume(Token::Tokens["storage_class"], "Expected storage_class for pointer");
         _consume(Token::Tokens["comma"], "Expected ',' for pointer.");
         auto decl = _type_decl();
-        std::unique_ptr<AST> access = nullptr;
         if (_match(Token::Tokens["comma"]))
-            access = _consume(Token::Tokens["access_mode"], "Expected access_mode for pointer").toString();
+            _consume(Token::Tokens["access_mode"], "Expected access_mode for pointer").toString();
         _consume(Token::Tokens["greater_than"], "Expected '>' for pointer.");
 
         auto ast = std::make_unique<AST>("type");
         ast->setName(pointer);
-        ast->setChild("storage", std::move(storage.toString()));
         ast->setChild("decl", std::move(decl));
-        ast->setChild("access", std::move(access));
         return ast;
     }
 
@@ -1033,16 +1024,14 @@ std::unique_ptr<AST> WgslParser::_type_decl() {
         auto array = _previous();
         _consume(Token::Tokens["less_than"], "Expected '<' for array type.");
         auto format = _type_decl();
-        std::unique_ptr<AST> count = nullptr;
         if (_match(Token::Tokens["comma"]))
-            count = _consume(Token::Tokens["element_count_expression"], "Expected element_count for array.").toString();
+            _consume(Token::Tokens["element_count_expression"], "Expected element_count for array.").toString();
         _consume(Token::Tokens["greater_than"], "Expected '>' for array.");
 
         auto ast = std::make_unique<AST>("array");
         ast->setName(array.toString());
-        ast->setChild("attributes", std::move(attrs));
+        ast->setChildVec("attributes", std::move(attrs));
         ast->setChild("format", std::move(format));
-        ast->setChild("count", std::move(count));
         return ast;
     }
 
@@ -1083,15 +1072,13 @@ std::unique_ptr<AST> WgslParser::_texture_sampler_types() {
     if (_match(Token::Tokens["storage_texture_type"])) {
         auto sampler = _previous();
         _consume(Token::Tokens["less_than"], "Expected '<' for sampler type.");
-        auto format = _consume(Token::Tokens["texel_format"], "Invalid texel format.").toString();
+        _consume(Token::Tokens["texel_format"], "Invalid texel format.");
         _consume(Token::Tokens["comma"], "Expected ',' after texel format.");
-        auto access = _consume(Token::Tokens["access_mode"], "Expected access mode for storage texture type.").toString();
+        _consume(Token::Tokens["access_mode"], "Expected access mode for storage texture type.");
         _consume(Token::Tokens["greater_than"], "Expected '>' for sampler type.");
 
         auto ast = std::make_unique<AST>("sampler");
         ast->setName(_previous().toString());
-        ast->setChild("format", std::move(format));
-        ast->setChild("access", std::move(access));
         return ast;
     }
 
@@ -1104,22 +1091,25 @@ std::vector<std::unique_ptr<AST>> WgslParser::_attribute() {
 
     std::vector<std::unique_ptr<AST>> attributes{};
 
-    while (_match(Token::Tokens["attr"]))
-    {
-        auto name = _consume(Token::Tokens["attribute_name"], "Expected attribute name");
+    while (_match(Token::Tokens["attr"])) {
+        auto name = _consume(Token::Tokens["attribute_name"],
+                             "Expected attribute name");
         auto attr = std::make_unique<AST>("attribute");
         attr->setName(name.toString());
         if (_match(Token::Tokens["paren_left"])) {
             // literal_or_ident
-            attr.value = _consume(Token::Tokens["literal_or_ident"], "Expected attribute value").toString();
+            std::vector<std::string> value = {
+                    _consume(Token::Tokens["literal_or_ident"],
+                             "Expected attribute value").toString()};
             if (_check(Token::Tokens["comma"])) {
                 _advance();
-                attr.value = [attr.value];
                 do {
-                    auto v = _consume(Token::Tokens["literal_or_ident"], "Expected attribute value").toString();
-                    attr.value.push(v);
+                    auto v = _consume(Token::Tokens["literal_or_ident"],
+                                      "Expected attribute value").toString();
+                    value.emplace_back(v);
                 } while (_match(Token::Tokens["comma"]));
             }
+            attr->setNameVec(value);
             _consume(Token::Tokens["paren_right"], "Expected ')'");
         }
         attributes.emplace_back(std::move(attr));
@@ -1135,15 +1125,17 @@ std::vector<std::unique_ptr<AST>> WgslParser::_attribute() {
                 attr->setName(name.toString());
                 if (_match(Token::Tokens["paren_left"])) {
                     // literal_or_ident
-                    attr.value = _consume(Token::Tokens["literal_or_ident"], "Expected attribute value").toString();
+                    std::vector<std::string> value = {_consume(Token::Tokens["literal_or_ident"],
+                                                               "Expected attribute value").toString()};
                     if (_check(Token::Tokens["comma"])) {
                         _advance();
-                        attr.value = [attr.value];
                         do {
-                            auto v = _consume(Token::Tokens["literal_or_ident"], "Expected attribute value").toString();
-                            attr.value.push(v);
+                            auto v = _consume(Token::Tokens["literal_or_ident"],
+                                              "Expected attribute value").toString();
+                            value.emplace_back(v);
                         } while (_match(Token::Tokens["comma"]));
                     }
+                    attr->setNameVec(value);
                     _consume(Token::Tokens["paren_right"], "Expected ')'");
                 }
                 attributes.emplace_back(std::move(attr));
@@ -1155,5 +1147,4 @@ std::vector<std::unique_ptr<AST>> WgslParser::_attribute() {
     }
 
     return attributes;
-}
 }
