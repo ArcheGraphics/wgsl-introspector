@@ -7,6 +7,9 @@
 #include "wgsl_parser.h"
 #include <memory>
 
+const std::vector<std::unique_ptr<AST>> AST::Empty = {};
+const std::vector<std::string> AST::EmptyString = {};
+
 std::vector<std::unique_ptr<AST>> WgslParser::parse(const std::string &code) {
     _initialize(code);
 
@@ -504,7 +507,7 @@ std::vector<std::unique_ptr<AST>> WgslParser::_switch_body() {
 
         std::unique_ptr<AST> ast = std::make_unique<AST>("case");
         ast->setChildVec("body", std::move(body));
-        ast->setNameVec(selector);
+        ast->setNameVec("selector", selector);
         cases.emplace_back(std::move(ast));
     }
 
@@ -1005,10 +1008,12 @@ std::unique_ptr<AST> WgslParser::_variable_decl() {
         return nullptr;
 
     // variable_qualifier: less_than storage_class (comma access_mode)? greater_than
+    std::string storage;
+    std::string access;
     if (_match(Token::Tokens["less_than"])) {
-        _consume(Token::Tokens["storage_class"], "Expected storage_class.").toString();
+        storage = _consume(Token::Tokens["storage_class"], "Expected storage_class.").toString();
         if (_match(Token::Tokens["comma"]))
-            _consume(Token::Tokens["access_mode"], "Expected access_mode.").toString();
+            access = _consume(Token::Tokens["access_mode"], "Expected access_mode.").toString();
         _consume(Token::Tokens["greater_than"], "Expected '>'.");
     }
 
@@ -1022,6 +1027,8 @@ std::unique_ptr<AST> WgslParser::_variable_decl() {
 
     auto ast = std::make_unique<AST>("var");
     ast->setChild("type", std::move(type));
+    ast->setNameVec("storage", {storage});
+    ast->setNameVec("access", {access});
     ast->setName(name.toString());
     return ast;
 }
@@ -1209,7 +1216,7 @@ std::vector<std::unique_ptr<AST>> WgslParser::_attribute() {
                     value.emplace_back(v);
                 } while (_match(Token::Tokens["comma"]));
             }
-            attr->setNameVec(value);
+            attr->setNameVec("value", value);
             _consume(Token::Tokens["paren_right"], "Expected ')'");
         }
         attributes.emplace_back(std::move(attr));
@@ -1235,7 +1242,7 @@ std::vector<std::unique_ptr<AST>> WgslParser::_attribute() {
                             value.emplace_back(v);
                         } while (_match(Token::Tokens["comma"]));
                     }
-                    attr->setNameVec(value);
+                    attr->setNameVec("value", value);
                     _consume(Token::Tokens["paren_right"], "Expected ')'");
                 }
                 attributes.emplace_back(std::move(attr));

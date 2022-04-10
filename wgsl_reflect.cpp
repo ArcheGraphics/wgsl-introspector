@@ -25,9 +25,26 @@ std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> WgslReflect::Type
         {"mat4x4", {16, 64}}
 };
 
+std::string WgslReflect::TextureTypes(const std::string &key) {
+    auto iter = Token::TextureType.find(key);
+    if (iter != Token::TextureType.end()) {
+        return iter->second.name;
+    } else {
+        return "-1";
+    }
+}
+
+std::string WgslReflect::SamplerTypes(const std::string &key) {
+    auto iter = Token::SamplerType.find(key);
+    if (iter != Token::SamplerType.end()) {
+        return iter->second.name;
+    } else {
+        return "-1";
+    }
+}
 
 WgslReflect::WgslReflect(const std::string &code) {
-
+    initialize(code);
 }
 
 void WgslReflect::initialize(const std::string &code) {
@@ -35,15 +52,15 @@ void WgslReflect::initialize(const std::string &code) {
 }
 
 bool WgslReflect::isTextureVar(AST *node) {
-    return false;
+    return node->type() == "var" && WgslReflect::TextureTypes(node->child("type")->name()) != "-1";
 }
 
 bool WgslReflect::isSamplerVar(AST *node) {
-    return false;
+    return node->type() == "var" && WgslReflect::SamplerTypes(node->child("type")->name()) != "-1";
 }
 
 bool WgslReflect::isUniformVar(AST *node) {
-    return false;
+    return node && node->type() == "var" && node->nameVec("storage")[0] == "uniform";
 }
 
 void WgslReflect::getAlias(const std::string &name) {

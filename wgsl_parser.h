@@ -12,24 +12,41 @@
 
 class AST {
 public:
+    static const std::vector<std::unique_ptr<AST>> Empty;
+    static const std::vector<std::string> EmptyString;
+
     explicit AST(const std::string &type) {
         _type = type;
+    }
+
+    const std::string &type() {
+        return _type;
     }
 
     void setChild(const std::string &name, std::unique_ptr<AST> &&ast) {
         _child[name] = std::move(ast);
     }
 
-    [[nodiscard]] const std::unordered_map<std::string, std::unique_ptr<AST>> &child() const {
-        return _child;
+    [[nodiscard]] AST* child(const std::string &name) const {
+        auto iter = _child.find(name);
+        if (iter != _child.end()) {
+            return iter->second.get();
+        } else {
+            return nullptr;
+        }
     }
 
     void setChildVec(const std::string &name, std::vector<std::unique_ptr<AST>> &&ast) {
         _childVec[name] = std::move(ast);
     }
 
-    [[nodiscard]] const std::unordered_map<std::string, std::vector<std::unique_ptr<AST>>> &childVec() const {
-        return _childVec;
+    [[nodiscard]] const std::vector<std::unique_ptr<AST>> &childVec(const std::string &name) const {
+        auto iter = _childVec.find(name);
+        if (iter != _childVec.end()) {
+            return iter->second;
+        } else {
+            return Empty;
+        }
     }
 
     void setName(const std::string &name) {
@@ -40,22 +57,27 @@ public:
         return _name;
     }
 
-    void setNameVec(const std::vector<std::string> &nameVec) {
-        _nameVec = nameVec;
+    void setNameVec(const std::string &name, const std::vector<std::string> &nameVec) {
+        _nameVec[name] = nameVec;
     }
 
-    [[nodiscard]] const std::vector<std::string> &nameVec() const {
-        return _nameVec;
+    [[nodiscard]] const std::vector<std::string> &nameVec(const std::string &name) const {
+        auto iter = _nameVec.find(name);
+        if (iter != _nameVec.end()) {
+            return iter->second;
+        } else {
+            return EmptyString;
+        }
     }
 
 private:
     friend class WgslParser;
 
     std::string _type;
+    std::string _name;
     std::unordered_map<std::string, std::unique_ptr<AST>> _child{};
     std::unordered_map<std::string, std::vector<std::unique_ptr<AST>>> _childVec{};
-    std::string _name;
-    std::vector<std::string> _nameVec;
+    std::unordered_map<std::string, std::vector<std::string>> _nameVec;
 };
 
 

@@ -14,6 +14,10 @@ public:
     // type: align, size
     static std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> TypeInfo;
 
+    static std::string TextureTypes(const std::string& key);
+
+    static std::string SamplerTypes(const std::string& key);
+
     WgslReflect(const std::string &code);
 
     void initialize(const std::string &code);
