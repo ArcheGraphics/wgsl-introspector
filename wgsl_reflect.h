@@ -53,12 +53,9 @@ public:
     void getTypeInfo(const std::string &type);
 
 private:
-
     void _getInputs(const std::string &args, std::vector<InputInfo> &inputs);
 
     std::optional<InputInfo> _getInputInfo(AST *node);
-
-    void _roundUp(int k, int n);
 
 public:
     std::vector<std::unique_ptr<AST>> ast;

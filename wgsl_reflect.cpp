@@ -210,7 +210,3 @@ void WgslReflect::_getInputs(const std::string &args, std::vector<InputInfo> &in
 std::optional<WgslReflect::InputInfo> WgslReflect::_getInputInfo(AST *node) {
 
 }
-
-void WgslReflect::_roundUp(int k, int n) {
-
-}
